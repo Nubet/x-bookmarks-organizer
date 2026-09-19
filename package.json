@@ -16,6 +16,7 @@
     "@types/react": "^18.2.64",
     "@types/react-dom": "^18.2.21",
     "extension": "^4.1.25",
+    "oxlint": "1.83.0",
     "tailwindcss": "4.3.3",
     "typescript": "7.0.2",
     "vitest": "3.2.4"
@@ -29,6 +30,9 @@
     "build:chrome": "npm run build:page && extension build --browser chrome",
     "build:firefox": "npm run build:page && extension build --browser firefox",
     "build:edge": "npm run build:page && extension build --browser edge",
+    "lint": "oxlint src tests benchmarks",
+    "doctor": "npx react-doctor@latest --verbose",
+    "doctor:diff": "npx react-doctor@latest --verbose --scope changed",
     "test": "vitest run",
     "benchmark:search": "vitest bench benchmarks/search-bookmarks.bench.ts"
   },
