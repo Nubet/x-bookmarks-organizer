@@ -4,16 +4,17 @@ import {sendRuntimeMessage} from '../shared/runtime'
 import type {BookmarkPreview, LibrarySnapshot} from '../shared/types'
 import {fetchBookmarkPage, mutateBookmark} from './page-bridge'
 import {isBookmarksRoute} from './route'
+import {countMedia, createSearchIndex, filterBookmarks, sortBookmarks, type MediaType, type SortMode} from '../domain/search/search-bookmarks'
 import './bookmarks-view.css'
 
 const ROOT_ID = 'bookmarks-organizer-root'
 const REENABLE_ID = 'bookmarks-organizer-reenable'
 const HIDDEN_ATTRIBUTE = 'data-bookmarks-organizer-hidden'
 const WIDE_ATTRIBUTE = 'data-bookmarks-organizer-wide'
+const INITIAL_RENDER_LIMIT = 100
+const RENDER_PAGE_SIZE = 100
 const monthFormatter = new Intl.DateTimeFormat('en-US', {month: 'long', year: 'numeric'})
 const dateFormatter = new Intl.DateTimeFormat(undefined, {month: 'short', day: 'numeric'})
-const urlPattern = /(?:https?:\/\/|www\.)\S+/i
-
 interface LibraryState {
   snapshot: LibrarySnapshot | null
   loading: boolean
@@ -21,9 +22,6 @@ interface LibraryState {
 }
 
 type ViewMode = 'bookmarks' | 'authors'
-type MediaType = 'all' | 'image' | 'video' | 'link' | 'text'
-type SortMode = 'sync-desc' | 'posted-desc'
-
 function SortDropdown({ sortMode, setSortMode, startTransition }: { sortMode: SortMode, setSortMode: (mode: SortMode) => void, startTransition: React.TransitionStartFunction }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -399,19 +397,21 @@ function BookmarksView() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
   const [bulkRemoving, setBulkRemoving] = useState(false)
   const [integrationEnabled, setIntegrationEnabled] = useState(true)
+  const [renderLimit, setRenderLimit] = useState(INITIAL_RENDER_LIMIT)
   const [, startTransition] = useTransition()
 
   const bookmarks = snapshot?.bookmarks ?? []
   const deferredQuery = useDeferredValue(query)
+  const searchIndex = useMemo(() => createSearchIndex(bookmarks), [bookmarks])
   const filteredBookmarks = useMemo(
-    () => sortBookmarks(filterBookmarks(bookmarks, deferredQuery, folderId, tag, mediaType), sortMode),
-    [bookmarks, deferredQuery, folderId, mediaType, sortMode, tag]
+    () => sortBookmarks(filterBookmarks(searchIndex, deferredQuery, folderId, tag, mediaType), sortMode),
+    [deferredQuery, folderId, mediaType, searchIndex, sortMode, tag]
   )
   const authorGroups = useMemo(() => groupAuthors(filteredBookmarks), [filteredBookmarks])
   const mediaCounts = useMemo(() => countMedia(bookmarks), [bookmarks])
   const monthlyBookmarks = useMemo(
-    () => groupBookmarksByMonth(filteredBookmarks, sortMode),
-    [filteredBookmarks, sortMode]
+    () => groupBookmarksByMonth(filteredBookmarks.slice(0, renderLimit), sortMode),
+    [filteredBookmarks, renderLimit, sortMode]
   )
   const visibleIds = useMemo(() => filteredBookmarks.map((bookmark) => bookmark.tweetId), [filteredBookmarks])
   const selectedVisibleCount = visibleIds.filter((id) => selectedIds.has(id)).length
@@ -532,6 +532,17 @@ function BookmarksView() {
           ))}
 
           {mode === 'authors' && <AuthorGrid authors={authorGroups} />}
+          {mode === 'bookmarks' && renderLimit < filteredBookmarks.length && (
+            <div className="xbo:flex xbo:justify-center xbo:px-6 xbo:pb-16">
+              <button
+                className="xbo:cursor-pointer xbo:rounded-full xbo:border xbo:border-white/25 xbo:bg-transparent xbo:px-5 xbo:py-2 xbo:text-sm xbo:text-white xbo:hover:bg-neutral-800"
+                type="button"
+                onClick={() => setRenderLimit((current) => current + RENDER_PAGE_SIZE)}
+              >
+                Load more ({filteredBookmarks.length - renderLimit} remaining)
+              </button>
+            </div>
+          )}
         </>
       )}
     </section>
@@ -801,52 +812,6 @@ function AuthorGrid({authors}: {authors: AuthorGroup[]}) {
 
 function EmptyState() {
   return <div className="xbo:mx-auto xbo:my-16 xbo:grid xbo:max-w-md xbo:gap-4 xbo:rounded-lg xbo:bg-neutral-900 xbo:p-12 xbo:text-center xbo:text-neutral-500"><strong className="xbo:text-xl xbo:leading-7 xbo:text-white">No bookmarks here</strong><span>Save a post on X or change your search.</span></div>
-}
-
-function filterBookmarks(bookmarks: BookmarkPreview[], query: string, folderId: string, tag: string, mediaType: MediaType) {
-  const normalizedQuery = query.trim().toLowerCase()
-  const usernameQuery = normalizedQuery.match(/^@([a-z0-9_]+)$/)?.[1]
-  const tagQuery = normalizedQuery.match(/^#([a-z0-9_]+)$/)?.[1]
-  return bookmarks.filter((bookmark) => {
-    const matchesQuery = usernameQuery
-      ? bookmark.author.username.toLowerCase() === usernameQuery
-      : tagQuery
-        ? bookmark.tags.some((bookmarkTag) => bookmarkTag.replace(/^#/, '').toLowerCase() === tagQuery)
-          || bookmark.text.toLowerCase().includes(`#${tagQuery}`)
-        : !normalizedQuery || `${bookmark.text} ${bookmark.author.name} ${bookmark.author.username}`.toLowerCase().includes(normalizedQuery)
-    const matchesMedia = mediaType === 'all'
-      || (mediaType === 'text' && !bookmark.media?.length)
-      || (mediaType === 'link' && hasLink(bookmark))
-      || bookmark.media?.some((media) => media.type === mediaType)
-    return matchesQuery && matchesMedia && (folderId === 'all' || bookmark.folderIds.includes(folderId)) && (tag === 'all' || bookmark.tags.includes(tag))
-  })
-}
-
-function sortBookmarks(bookmarks: BookmarkPreview[], sortMode: SortMode) {
-  return [...bookmarks].sort((left, right) => {
-    const leftValue = getSortTimestamp(left, sortMode) ?? 0
-    const rightValue = getSortTimestamp(right, sortMode) ?? 0
-    return rightValue - leftValue
-  })
-}
-
-function getSortTimestamp(bookmark: BookmarkPreview, sortMode: SortMode) {
-  if (sortMode === 'sync-desc') return bookmark.updatedAt || null
-  return Date.parse(bookmark.postedAt ?? '') || null
-}
-
-function countMedia(bookmarks: BookmarkPreview[]) {
-  const counts: Record<string, number> = {All: bookmarks.length, Images: 0, Videos: 0, Links: 0, 'Text only': 0}
-  for (const bookmark of bookmarks) {
-    if (!bookmark.media?.length) counts['Text only'] += 1
-    if (hasLink(bookmark)) counts.Links += 1
-    for (const media of bookmark.media ?? []) counts[media.type === 'video' ? 'Videos' : 'Images'] += 1
-  }
-  return counts
-}
-
-function hasLink(bookmark: BookmarkPreview) {
-  return urlPattern.test(bookmark.text)
 }
 
 function summaryFor(mode: ViewMode, bookmarkCount: number, authorCount: number) {
