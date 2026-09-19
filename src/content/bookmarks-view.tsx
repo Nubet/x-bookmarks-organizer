@@ -18,11 +18,14 @@ const HIDDEN_ATTRIBUTE = 'data-bookmarks-organizer-hidden'
 const WIDE_ATTRIBUTE = 'data-bookmarks-organizer-wide'
 const INITIAL_RENDER_LIMIT = 100
 const RENDER_PAGE_SIZE = 100
+const LIBRARY_PAGE_SIZE = 100
 const monthFormatter = new Intl.DateTimeFormat('en-US', {month: 'long', year: 'numeric'})
 interface LibraryState {
   snapshot: LibrarySnapshot | null
   loading: boolean
+  loadingMore: boolean
   error: string
+  nextOffset: number | null
 }
 
 type ViewMode = 'bookmarks' | 'authors'
@@ -77,7 +80,7 @@ function SortDropdown({ sortMode, setSortMode, startTransition }: { sortMode: So
   )
 }
 
-let state: LibraryState = {snapshot: null, loading: false, error: ''}
+let state: LibraryState = {snapshot: null, loading: false, loadingMore: false, error: '', nextOffset: null}
 let loaded = false
 const listeners = new Set<() => void>()
 const bookmarkActions = createBookmarkActions({
@@ -108,14 +111,56 @@ function getSnapshot() {
 }
 
 async function loadLibrary() {
-  state = {...state, loading: true, error: ''}
+  state = {snapshot: null, loading: true, loadingMore: false, error: '', nextOffset: null}
   notify()
 
-  const response = await sendRuntimeMessage<LibrarySnapshot>({type: 'LIBRARY_GET'})
+  const response = await sendRuntimeMessage<{
+    bookmarks: BookmarkPreview[]
+    nextOffset: number | null
+    total: number
+  }>({type: 'LIBRARY_GET_PAGE', offset: 0, limit: LIBRARY_PAGE_SIZE})
   state = response.ok
-    ? {snapshot: response.data, loading: false, error: ''}
-    : {snapshot: null, loading: false, error: response.error}
+    ? {
+        snapshot: {bookmarks: response.data.bookmarks, folders: [], tags: []},
+        loading: false,
+        loadingMore: false,
+        error: '',
+        nextOffset: response.data.nextOffset,
+      }
+    : {snapshot: null, loading: false, loadingMore: false, error: response.error, nextOffset: null}
   notify()
+}
+
+async function loadMoreLibrary() {
+  if (state.loading || state.loadingMore || state.nextOffset === null) return false
+
+  const offset = state.nextOffset
+  state = {...state, loadingMore: true, error: ''}
+  notify()
+
+  const response = await sendRuntimeMessage<{
+    bookmarks: BookmarkPreview[]
+    nextOffset: number | null
+    total: number
+  }>({type: 'LIBRARY_GET_PAGE', offset, limit: LIBRARY_PAGE_SIZE})
+
+  if (!response.ok) {
+    state = {...state, loadingMore: false, error: response.error}
+    notify()
+    return false
+  }
+
+  state = {
+    ...state,
+    loadingMore: false,
+    error: '',
+    nextOffset: response.data.nextOffset,
+    snapshot: state.snapshot
+      ? {...state.snapshot, bookmarks: [...state.snapshot.bookmarks, ...response.data.bookmarks]}
+      : state.snapshot,
+  }
+  notify()
+  return true
 }
 
 export function mountBookmarksView() {
@@ -396,7 +441,7 @@ function groupBookmarksByMonth(bookmarks: BookmarkPreview[], sortMode: SortMode)
 }
 
 function BookmarksView() {
-  const {snapshot, loading, error} = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
+  const {snapshot, loading, loadingMore, error, nextOffset} = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
   const [mode, setMode] = useState<ViewMode>('bookmarks')
   const [query, setQuery] = useState('')
   const [folderId, setFolderId] = useState('all')
@@ -515,7 +560,7 @@ function BookmarksView() {
       {loading && <p className="xbo:m-6 xbo:text-center xbo:text-neutral-500">Loading bookmarks...</p>}
       {error && <p className="xbo:m-6 xbo:rounded-lg xbo:border xbo:border-white/10 xbo:bg-neutral-900 xbo:p-2 xbo:text-center xbo:text-white">{error}</p>}
 
-      {!loading && !error && (
+      {!loading && snapshot && (
         <>
           <div className="xbo:my-6 xbo:flex xbo:items-center xbo:justify-between xbo:px-6">
             <div className="xbo:font-mono xbo:text-xs xbo:uppercase xbo:tracking-widest xbo:text-neutral-500">{summaryFor(mode, filteredBookmarks.length, authorGroups.length)}</div>
@@ -546,14 +591,24 @@ function BookmarksView() {
           ))}
 
           {mode === 'authors' && <AuthorGrid authors={authorGroups} />}
-          {mode === 'bookmarks' && renderLimit < filteredBookmarks.length && (
+          {mode === 'bookmarks' && (renderLimit < filteredBookmarks.length || nextOffset !== null) && (
             <div className="xbo:flex xbo:justify-center xbo:px-6 xbo:pb-16">
               <button
                 className="xbo:cursor-pointer xbo:rounded-full xbo:border xbo:border-white/25 xbo:bg-transparent xbo:px-5 xbo:py-2 xbo:text-sm xbo:text-white xbo:hover:bg-neutral-800"
                 type="button"
-                onClick={() => setRenderLimit((current) => current + RENDER_PAGE_SIZE)}
+                disabled={loadingMore}
+                onClick={() => {
+                  if (renderLimit < filteredBookmarks.length) {
+                    setRenderLimit((current) => current + RENDER_PAGE_SIZE)
+                    return
+                  }
+
+                  void loadMoreLibrary().then((loaded) => {
+                    if (loaded) setRenderLimit((current) => current + RENDER_PAGE_SIZE)
+                  })
+                }}
               >
-                Load more ({filteredBookmarks.length - renderLimit} remaining)
+                {loadingMore ? 'Loading...' : `Load more (${nextOffset === null ? filteredBookmarks.length - renderLimit : 'more'} remaining)`}
               </button>
             </div>
           )}
