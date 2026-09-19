@@ -12,6 +12,7 @@ export interface BookmarkPreview {
   updatedAt: number
   source: 'x' | 'manual'
   needsApiUpdate: boolean
+  searchTokens?: string[]
   avatarUrl?: string
   postedAt?: string
   media?: BookmarkMedia[]
@@ -48,6 +49,12 @@ export interface LibrarySnapshot {
   tags: string[]
 }
 
+export interface LibraryPage {
+  bookmarks: BookmarkPreview[]
+  nextOffset: number | null
+  total: number
+}
+
 export interface ExtensionSettings {
   key: 'default'
   pageIntegration: boolean
@@ -56,6 +63,7 @@ export interface ExtensionSettings {
 
 export type RuntimeMessage =
   | {type: 'LIBRARY_GET'}
+  | {type: 'LIBRARY_GET_PAGE'; offset: number; limit: number}
   | {type: 'BOOKMARK_SAVE'; bookmark: BookmarkCapture}
   | {type: 'BOOKMARK_DELETE'; tweetId: string}
   | {type: 'BOOKMARKS_SYNC'; bookmarks: BookmarkCapture[]}

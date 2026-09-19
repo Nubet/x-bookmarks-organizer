@@ -4,6 +4,7 @@ import type {
   ExtensionSettings,
   LibrarySnapshot,
 } from '../shared/types'
+import {createSearchTokens} from '../domain/search/search-bookmarks'
 
 const defaultSettings: ExtensionSettings = {
   key: 'default',
@@ -23,6 +24,16 @@ export async function getLibrary(): Promise<LibrarySnapshot> {
     folders,
     tags: tagRecords.map((tag) => tag.name),
   }
+}
+
+export async function getBookmarkPage(offset: number, limit: number) {
+  const [bookmarks, total] = await Promise.all([
+    database.bookmarks.orderBy('createdAt').reverse().offset(offset).limit(limit).toArray(),
+    database.bookmarks.count(),
+  ])
+
+  const nextOffset = offset + bookmarks.length < total ? offset + bookmarks.length : null
+  return {bookmarks, nextOffset, total}
 }
 
 export async function getSettings(): Promise<ExtensionSettings> {
@@ -65,6 +76,7 @@ export async function upsertCapturedBookmark(
     updatedAt: now,
     source: existing?.source ?? 'x',
     needsApiUpdate: true,
+    searchTokens: createSearchTokens({text: capture.text, author: capture.author, tags: existing?.tags ?? []}),
   } as const
 
   await database.transaction('rw', database.bookmarks, database.tags, async () => {
@@ -106,6 +118,7 @@ export async function upsertRemoteBookmarks(captures: BookmarkCapture[]) {
           updatedAt: now,
           source: 'x',
           needsApiUpdate: false,
+          searchTokens: createSearchTokens({text: capture.text, author: capture.author, tags: existing?.tags ?? []}),
         } as const
 
         for (const tag of bookmark.tags) {

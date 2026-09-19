@@ -1,6 +1,7 @@
 import type {RuntimeMessage, RuntimeResponse} from './shared/types'
 import {
   getLibrary,
+  getBookmarkPage,
   getSettings,
   updateSettings,
   upsertRemoteBookmarks,

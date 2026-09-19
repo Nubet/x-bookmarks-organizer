@@ -4,6 +4,7 @@ import type {
   ExtensionSettings,
   FolderPreview,
 } from '../shared/types'
+import {createSearchTokens} from '../domain/search/search-bookmarks'
 
 export interface TagRecord {
   id: string
@@ -31,6 +32,17 @@ export class BookmarkDatabase extends Dexie {
       folders: 'id,name',
       tags: 'id,name',
       settings: 'key',
+    })
+
+    this.version(3).stores({
+      bookmarks: 'id,tweetId,createdAt,updatedAt,postedAt,*searchTokens',
+      folders: 'id,name',
+      tags: 'id,name',
+      settings: 'key',
+    }).upgrade(async (transaction) => {
+      await transaction.table('bookmarks').toCollection().modify((bookmark) => {
+        bookmark.searchTokens = createSearchTokens(bookmark)
+      })
     })
   }
 }

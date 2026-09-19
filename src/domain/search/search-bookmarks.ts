@@ -29,6 +29,15 @@ export function createSearchIndex(bookmarks: BookmarkPreview[]): SearchIndex {
   }
 }
 
+export function createSearchTokens(input: Pick<BookmarkPreview, 'text' | 'author' | 'tags'>) {
+  return Array.from(new Set(
+    `${input.text} ${input.author.name} ${input.author.username} ${input.tags.join(' ')}`
+      .split(/[^a-zA-Z0-9_]+/)
+      .map(normalize)
+      .filter(Boolean)
+  ))
+}
+
 export function filterBookmarks(
   index: SearchIndex,
   query: string,

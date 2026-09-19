@@ -75,24 +75,26 @@ export default function initial() {
   }
 
   async function runSync() {
-    const bookmarks = []
     const seenCursors = new Set<string>()
     let cursor: string | null = null
+    let total = 0
 
     for (let page = 0; page < 50; page += 1) {
       const result = await fetchBookmarkPage(cursor)
-      bookmarks.push(...result.bookmarks)
 
       if (result.bookmarks.length === 0) break
+
+      const response = await sendRuntimeMessage({type: 'BOOKMARKS_SYNC', bookmarks: result.bookmarks})
+      if (!response.ok) throw new Error(response.error)
+      total += result.bookmarks.length
+
       if (!result.nextCursor || seenCursors.has(result.nextCursor)) break
       seenCursors.add(result.nextCursor)
       cursor = result.nextCursor
     }
 
-    const response = await sendRuntimeMessage({type: 'BOOKMARKS_SYNC', bookmarks})
-    if (!response.ok) throw new Error(response.error)
     refreshOrganizer()
-    return {status: `Synced ${bookmarks.length} bookmarks`}
+    return {status: `Synced ${total} bookmarks`}
   }
 
 }
