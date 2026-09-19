@@ -316,7 +316,6 @@ function BookmarksView() {
   const [tag, setTag] = useState('all')
   const [mediaType, setMediaType] = useState<MediaType>('all')
   const [sortMode, setSortMode] = useState<SortMode>('posted-desc')
-  const [searchOpen, setSearchOpen] = useState(false)
   const [addOpen, setAddOpen] = useState(false)
   const [actionMessage, setActionMessage] = useState('')
   const [actionError, setActionError] = useState('')
@@ -374,7 +373,7 @@ function BookmarksView() {
         </div>
       </header>
 
-      <div className="xbo:relative xbo:flex xbo:justify-center xbo:border-b xbo:border-white/10 xbo:p-6">
+      <div className="xbo:flex xbo:flex-col xbo:items-center xbo:gap-4 xbo:border-b xbo:border-white/10 xbo:p-6">
         <label className="xbo:block xbo:w-full xbo:max-w-md">
           <span className="xbo:absolute xbo:h-px xbo:w-px xbo:overflow-hidden xbo:[clip:rect(0,0,0,0)]">Search bookmarks</span>
           <input
@@ -382,17 +381,14 @@ function BookmarksView() {
             type="search"
             placeholder="Search bookmarks — press / to focus"
             value={query}
-            onFocus={() => setSearchOpen(true)}
             onChange={(event) => setQuery(event.target.value)}
           />
         </label>
-        {searchOpen && (
-          <SmartSearch
-            mediaCounts={mediaCounts}
-            mediaType={mediaType}
-            onMediaTypeChange={(value) => startTransition(() => setMediaType(value))}
-          />
-        )}
+        <MediaTypeFilter
+          mediaCounts={mediaCounts}
+          mediaType={mediaType}
+          onMediaTypeChange={(value) => startTransition(() => setMediaType(value))}
+        />
       </div>
 
       {addOpen && (
@@ -494,7 +490,7 @@ function SaveForm({saving, onSubmit}: {saving: boolean; onSubmit: (event: FormEv
   )
 }
 
-function SmartSearch({
+function MediaTypeFilter({
   mediaCounts,
   mediaType,
   onMediaTypeChange,
@@ -511,21 +507,19 @@ function SmartSearch({
   ]
 
   return (
-    <div className="xbo:absolute xbo:top-20 xbo:z-20 xbo:w-[min(540px,calc(100%-48px))] xbo:rounded-lg xbo:border xbo:border-white/10 xbo:bg-neutral-950 xbo:p-6">
-      <span className="xbo:mb-3 xbo:block xbo:font-mono xbo:text-sm xbo:uppercase xbo:tracking-widest xbo:text-white">MEDIA TYPE</span>
-      <div className="xbo:mb-6 xbo:flex xbo:flex-wrap xbo:gap-2 xbo:border-b xbo:border-white/10 xbo:pb-6">
-        {mediaOptions.map(([value, label]) => (
-          <button
-            key={value}
-            className="xbo:cursor-pointer xbo:rounded-full xbo:border xbo:border-white/25 xbo:bg-transparent xbo:px-4 xbo:py-2 xbo:text-sm xbo:text-white xbo:transition xbo:hover:bg-neutral-800 xbo:data-[selected=true]:border-white xbo:data-[selected=true]:bg-white xbo:data-[selected=true]:text-black"
-            data-selected={mediaType === value}
-            type="button"
-            onClick={() => onMediaTypeChange(value)}
-          >
-            {label} <b>{value === 'all' ? mediaCounts.All : mediaCounts[label] ?? 0}</b>
-          </button>
-        ))}
-      </div>
+    <div className="xbo:flex xbo:flex-wrap xbo:justify-center xbo:gap-2">
+      {mediaOptions.map(([value, label]) => (
+        <button
+          key={value}
+          className="xbo:cursor-pointer xbo:rounded-full xbo:border xbo:border-white/25 xbo:bg-transparent xbo:px-4 xbo:py-2 xbo:text-sm xbo:text-white xbo:transition xbo:hover:bg-neutral-800 xbo:data-[selected=true]:border-white xbo:data-[selected=true]:bg-neutral-800 xbo:data-[selected=true]:text-white"
+          data-selected={mediaType === value}
+          aria-pressed={mediaType === value}
+          type="button"
+          onClick={() => onMediaTypeChange(value)}
+        >
+          {label} <b>{value === 'all' ? mediaCounts.All : mediaCounts[label] ?? 0}</b>
+        </button>
+      ))}
     </div>
   )
 }
