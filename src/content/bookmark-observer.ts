@@ -1,41 +1,24 @@
 import {sendRuntimeMessage} from '../shared/runtime'
 import type {BookmarkCapture} from '../shared/types'
-import {captureBookmark, findBookmarkButtons} from './x-dom-adapter'
-
-const BOUND_ATTRIBUTE = 'data-x-bookmarks-organizer-bound'
+import {captureBookmark} from './x-dom-adapter'
 
 export function observeBookmarkButtons(
   onCapture: (bookmark: BookmarkCapture) => void
 ) {
-  const bindButtons = (root: ParentNode) => {
-    for (const button of findBookmarkButtons(root)) {
-      if (button.hasAttribute(BOUND_ATTRIBUTE)) continue
+  const handleClick = (event: MouseEvent) => {
+    const target = event.target
+    if (!(target instanceof Element)) return
 
-      button.setAttribute(BOUND_ATTRIBUTE, 'true')
-      button.addEventListener('click', () => {
-        const bookmark = captureBookmark(button)
-        if (bookmark) onCapture(bookmark)
-      })
-    }
+    const button = target.closest<HTMLElement>('[data-testid="bookmark"]')
+    if (!button) return
+
+    const bookmark = captureBookmark(button)
+    if (bookmark) onCapture(bookmark)
   }
 
-  bindButtons(document)
+  document.addEventListener('click', handleClick, true)
 
-  const observer = new MutationObserver((mutations) => {
-    for (const mutation of mutations) {
-      for (const node of mutation.addedNodes) {
-        if (node instanceof Element) {
-          bindButtons(node)
-        }
-      }
-    }
-  })
-
-  if (document.body) {
-    observer.observe(document.body, {childList: true, subtree: true})
-  }
-
-  return () => observer.disconnect()
+  return () => document.removeEventListener('click', handleClick, true)
 }
 
 export function saveCapturedBookmark(bookmark: BookmarkCapture) {

@@ -4,19 +4,31 @@ const PAGE_SCRIPT_PATH = 'page/page-script.js'
 const REQUEST_TIMEOUT_MS = 15000
 
 let requestCounter = 0
+let pageScriptPromise: Promise<void> | null = null
 
 export function installPageScript() {
   if (document.querySelector(`script[data-x-bookmarks-organizer-page]`)) {
-    return
+    return Promise.resolve()
   }
 
-  const script = document.createElement('script')
-  script.src = chrome.runtime.getURL(PAGE_SCRIPT_PATH)
-  script.dataset.xBookmarksOrganizerPage = 'true'
-  script.async = false
+  if (pageScriptPromise) return pageScriptPromise
 
-  const parent = document.head ?? document.documentElement
-  parent?.prepend(script)
+  pageScriptPromise = new Promise<void>((resolve, reject) => {
+    const script = document.createElement('script')
+    script.src = chrome.runtime.getURL(PAGE_SCRIPT_PATH)
+    script.dataset.xBookmarksOrganizerPage = 'true'
+    script.async = false
+    script.onload = () => resolve()
+    script.onerror = () => {
+      pageScriptPromise = null
+      reject(new Error('Could not load the X page bridge'))
+    }
+
+    const parent = document.head ?? document.documentElement
+    parent?.prepend(script)
+  })
+
+  return pageScriptPromise
 }
 
 export function getLatestTransactionId() {
@@ -41,7 +53,9 @@ export function mutateBookmark(
   return requestPageOperation<{success: true}>(operation, {tweetId})
 }
 
-function requestPageOperation<T>(operation: string, payload?: unknown) {
+async function requestPageOperation<T>(operation: string, payload?: unknown) {
+  await installPageScript()
+
   const requestId = `request-${Date.now()}-${requestCounter++}`
 
   return new Promise<T>((resolve, reject) => {

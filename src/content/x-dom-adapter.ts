@@ -1,11 +1,6 @@
 import type {BookmarkCapture} from '../shared/types'
 
 const TWEET_SELECTOR = 'article[data-testid="tweet"]'
-const BOOKMARK_SELECTOR = '[data-testid="bookmark"]'
-
-export function findBookmarkButtons(root: ParentNode = document) {
-  return Array.from(root.querySelectorAll<HTMLElement>(BOOKMARK_SELECTOR))
-}
 
 export function captureBookmark(button: HTMLElement): BookmarkCapture | null {
   const article = button.closest<HTMLElement>(TWEET_SELECTOR)
