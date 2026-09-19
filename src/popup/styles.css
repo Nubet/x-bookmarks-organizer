@@ -1,12 +1,27 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400&family=JetBrains+Mono:wght@400&display=swap');
+
 :root {
-  color: #e7e9ea;
-  background: #0f1419;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --xbo-background: #0a0a0a;
+  --xbo-foreground: #ffffff;
+  --xbo-primary: #ffffff;
+  --xbo-primary-foreground: #0a0a0a;
+  --xbo-card: #191919;
+  --xbo-muted: #1a1c20;
+  --xbo-muted-foreground: #7d8187;
+  --xbo-border: #212327;
+  --xbo-border-subtle: rgba(255, 255, 255, 0.25);
+
+  --xbo-font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --xbo-font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
 }
 
 body {
   min-width: 320px;
   margin: 0;
+  color: var(--xbo-foreground);
+  background: var(--xbo-background);
+  font-family: var(--xbo-font-sans);
+  font-weight: 400;
 }
 
 button,
@@ -17,42 +32,52 @@ input {
 .popup_app {
   box-sizing: border-box;
   min-height: 220px;
-  padding: 16px;
+  padding: 24px;
 }
 
 .popup_header {
-  margin-bottom: 20px;
+  margin-bottom: 24px;
 }
 
 .popup_eyebrow {
-  margin: 0 0 4px;
-  color: #1d9bf0;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
+  margin: 0 0 8px;
+  color: var(--xbo-foreground);
+  font-family: var(--xbo-font-mono);
+  font-size: 14px;
+  font-weight: 400;
+  letter-spacing: 1.4px;
   text-transform: uppercase;
 }
 
 h1 {
   margin: 0;
-  font-size: 20px;
-  line-height: 1.2;
+  font-family: var(--xbo-font-sans);
+  font-size: 32px;
+  line-height: 36px;
+  letter-spacing: -0.6px;
+  font-weight: 400;
 }
 
 .settings_section {
   display: grid;
-  gap: 12px;
+  gap: 16px;
 }
 
 .sync_button {
-  border: 0;
-  border-radius: 999px;
-  background: #1d9bf0;
-  color: white;
+  border: 1px solid var(--xbo-border-subtle);
+  border-radius: 9999px;
+  background: transparent;
+  color: var(--xbo-foreground);
   cursor: pointer;
-  font-size: 13px;
-  font-weight: 700;
-  padding: 10px 14px;
+  font-family: var(--xbo-font-sans);
+  font-size: 14px;
+  padding: 8px 16px;
+  transition: background 0.2s;
+  justify-self: start;
+}
+
+.sync_button:hover:not(:disabled) {
+  background: var(--xbo-muted);
 }
 
 .sync_button:disabled {
@@ -65,10 +90,10 @@ h1 {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  border: 1px solid #253341;
+  border: 1px solid var(--xbo-border);
   border-radius: 8px;
-  background: #15202b;
-  padding: 12px;
+  background: var(--xbo-muted);
+  padding: 24px;
 }
 
 .setting_row span {
@@ -77,29 +102,35 @@ h1 {
 }
 
 .setting_row strong {
-  font-size: 13px;
+  font-size: 16px;
+  font-weight: 400;
 }
 
 .setting_row small {
-  color: #8b98a5;
-  font-size: 12px;
-  line-height: 1.35;
+  color: var(--xbo-muted-foreground);
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 400;
 }
 
 .setting_row input {
   width: 18px;
   height: 18px;
-  accent-color: #1d9bf0;
+  accent-color: var(--xbo-primary);
   flex: 0 0 auto;
 }
 
 .status_message {
-  margin: 20px 0;
-  color: #8b98a5;
-  font-size: 13px;
+  margin: 24px 0;
+  color: var(--xbo-muted-foreground);
+  font-size: 14px;
   text-align: center;
 }
 
 .status_error {
-  color: #f4212e;
+  color: var(--xbo-foreground);
+  border: 1px solid var(--xbo-border);
+  background: var(--xbo-muted);
+  padding: 8px 16px;
+  border-radius: 8px;
 }
