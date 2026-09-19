@@ -1,6 +1,8 @@
 import {memo, useState} from 'react'
 import type {BookmarkPreview} from '../../shared/types'
 
+const dateFormatter = new Intl.DateTimeFormat(undefined, {month: 'short', day: 'numeric'})
+
 export function BookmarkGrid({
   bookmarks,
   selectedIds,
@@ -63,5 +65,5 @@ export function EmptyState() {
 function formatDate(value: string | number) {
   const timestamp = typeof value === 'number' ? value : Date.parse(value)
   if (!Number.isFinite(timestamp)) return 'recently'
-  return new Intl.DateTimeFormat(undefined, {month: 'short', day: 'numeric'}).format(timestamp)
+  return dateFormatter.format(timestamp)
 }

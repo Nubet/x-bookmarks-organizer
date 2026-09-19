@@ -97,9 +97,7 @@ export async function upsertCapturedBookmark(
   await database.transaction('rw', database.bookmarks, database.tags, async () => {
     await database.bookmarks.put(bookmark)
 
-    for (const tag of bookmark.tags) {
-      await database.tags.put({id: tag, name: tag})
-    }
+    await database.tags.bulkPut(bookmark.tags.map((tag) => ({id: tag, name: tag})))
   })
 
   return bookmark

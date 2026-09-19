@@ -464,8 +464,8 @@ function BookmarksView() {
   const {snapshot, loading, loadingMore, error, nextOffset, activeQuery} = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
   const [mode, setMode] = useState<ViewMode>('bookmarks')
   const [query, setQuery] = useState('')
-  const [folderId, setFolderId] = useState('all')
-  const [tag, setTag] = useState('all')
+  const folderId = 'all'
+  const tag = 'all'
   const [mediaType, setMediaType] = useState<MediaType>('all')
   const [sortMode, setSortMode] = useState<SortMode>('posted-desc')
   const [addOpen, setAddOpen] = useState(false)
@@ -636,9 +636,7 @@ function BookmarksView() {
                     return
                   }
 
-                  void loadMoreLibrary(activeQuery ? {query, folderId, tag, mediaType, sortMode} : undefined).then((loaded) => {
-                    if (loaded) setRenderLimit((current) => current + RENDER_PAGE_SIZE)
-                  })
+                  void handleLoadMore()
                 }}
               >
                 {loadingMore ? 'Loading...' : `Load more (${nextOffset === null ? filteredBookmarks.length - renderLimit : 'more'} remaining)`}
@@ -696,6 +694,15 @@ function BookmarksView() {
     }
 
     window.location.reload()
+  }
+
+  async function handleLoadMore() {
+    try {
+      const loaded = await loadMoreLibrary(activeQuery ? {query, folderId, tag, mediaType, sortMode} : undefined)
+      if (loaded) setRenderLimit((current) => current + RENDER_PAGE_SIZE)
+    } catch (reason) {
+      setActionError(reason instanceof Error ? reason.message : 'Could not load more bookmarks.')
+    }
   }
 
   async function removeSingleBookmark(tweetId: string) {
