@@ -2,10 +2,12 @@ import {sendRuntimeMessage} from '../shared/runtime'
 import type {ExtensionSettings} from '../shared/types'
 import {observeBookmarkButtons, saveCapturedBookmark} from './bookmark-observer'
 import {fetchBookmarkPage, getLatestTransactionId, installPageScript} from './page-bridge'
+import {refreshBookmarksView, watchBookmarksRoute} from './bookmarks-view'
 
 export default function initial() {
   installPageScript()
   let stopObserving = () => {}
+  let stopBookmarksView = () => {}
   let disposed = false
 
   void start()
@@ -13,6 +15,7 @@ export default function initial() {
   return () => {
     disposed = true
     stopObserving()
+    stopBookmarksView()
   }
 
   async function start() {
@@ -23,6 +26,7 @@ export default function initial() {
     if (disposed || !response.ok || !response.data.pageIntegration) return
 
     stopObserving = observeBookmarkButtons(saveCapturedBookmark)
+    stopBookmarksView = watchBookmarksRoute()
 
     void getLatestTransactionId().catch(() => undefined)
   }
@@ -47,6 +51,7 @@ export default function initial() {
       cursor = result.nextCursor
     }
 
-    await sendRuntimeMessage({type: 'BOOKMARKS_SYNC', bookmarks})
+    const response = await sendRuntimeMessage({type: 'BOOKMARKS_SYNC', bookmarks})
+    if (response.ok) refreshBookmarksView()
   }
 }
