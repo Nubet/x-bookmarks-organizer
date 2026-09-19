@@ -31,12 +31,16 @@ export function createSearchIndex(bookmarks: BookmarkPreview[]): SearchIndex {
 }
 
 export function createSearchTokens(input: Pick<BookmarkPreview, 'text' | 'author' | 'tags'>) {
-  return Array.from(new Set(
-    `${input.text} ${input.author.name} ${input.author.username} ${input.tags.join(' ')}`
-      .split(/[^a-zA-Z0-9_]+/)
-      .map(normalize)
-      .filter(Boolean)
-  ))
+  return tokenize(`${input.text} ${input.author.name} ${input.author.username} ${input.tags.join(' ')}`)
+}
+
+export function tokenizeSearchQuery(query: string) {
+  return tokenize(query)
+}
+
+export function shouldUseTokenIndex(query: string, tokens: string[]) {
+  const normalized = normalize(query)
+  return tokens.length > 1 || normalized.startsWith('@') || normalized.startsWith('#')
 }
 
 export function filterBookmarks(
@@ -110,4 +114,13 @@ function normalize(value: string) {
     .trim()
     .replace(/\s+/g, ' ')
     .toLowerCase()
+}
+
+function tokenize(value: string) {
+  return Array.from(new Set(
+    value
+      .split(/[^a-zA-Z0-9_]+/)
+      .map(normalize)
+      .filter(Boolean)
+  ))
 }
