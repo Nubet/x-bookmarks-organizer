@@ -1,11 +1,12 @@
 {
   "private": true,
   "name": "x-bookmarks-organizer",
-  "description": "Adds a sidebar panel to the browser with a simple React page.",
+  "description": "Organizes X bookmarks in a local React-based browser extension.",
   "version": "1.0.0",
   "license": "MIT",
   "type": "module",
   "dependencies": {
+    "dexie": "4.4.6",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
@@ -13,8 +14,8 @@
     "@types/chrome": "^0.0.287",
     "@types/react": "^18.2.64",
     "@types/react-dom": "^18.2.21",
-    "typescript": "7.0.2",
-    "extension": "^4.1.25"
+    "extension": "^4.1.25",
+    "typescript": "7.0.2"
   },
   "scripts": {
     "dev": "extension dev",

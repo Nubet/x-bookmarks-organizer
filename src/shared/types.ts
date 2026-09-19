@@ -22,10 +22,16 @@ export interface LibrarySnapshot {
   tags: string[]
 }
 
+export interface ExtensionSettings {
+  key: 'default'
+  pageIntegration: boolean
+  autoSync: boolean
+}
+
 export type RuntimeMessage =
-  | {type: 'BOOKMARKS_LIST'}
-  | {type: 'FOLDER_LIST'}
-  | {type: 'TAG_LIST'}
+  | {type: 'LIBRARY_GET'}
+  | {type: 'SETTINGS_GET'}
+  | {type: 'SETTINGS_UPDATE'; settings: Partial<ExtensionSettings>}
   | {type: 'SYNC_START'}
 
 export type RuntimeResponse<T> =

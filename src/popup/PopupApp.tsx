@@ -1,63 +1,39 @@
-import {useDeferredValue, useState, useSyncExternalStore} from 'react'
+import {useSyncExternalStore} from 'react'
 import {sendRuntimeMessage} from '../shared/runtime'
-import type {BookmarkPreview, LibrarySnapshot} from '../shared/types'
+import type {ExtensionSettings} from '../shared/types'
 
-const emptySnapshot: LibrarySnapshot = {
-  bookmarks: [],
-  folders: [],
-  tags: [],
-}
-
-interface LibraryView {
-  snapshot: LibrarySnapshot
+interface SettingsView {
+  settings: ExtensionSettings | null
   loading: boolean
   error: string
 }
 
-let view: LibraryView = {
-  snapshot: emptySnapshot,
-  loading: false,
-  error: '',
-}
+let view: SettingsView = {settings: null, loading: false, error: ''}
 const listeners = new Set<() => void>()
 
 function notify() {
   for (const listener of listeners) listener()
 }
 
-async function loadLibrary() {
+async function loadSettings() {
   if (view.loading) return
 
   view = {...view, loading: true, error: ''}
   notify()
 
-  const [bookmarksResponse, foldersResponse, tagsResponse] = await Promise.all([
-    sendRuntimeMessage<BookmarkPreview[]>({type: 'BOOKMARKS_LIST'}),
-    sendRuntimeMessage<LibrarySnapshot['folders']>({type: 'FOLDER_LIST'}),
-    sendRuntimeMessage<string[]>({type: 'TAG_LIST'}),
-  ])
+  const response = await sendRuntimeMessage<ExtensionSettings>({
+    type: 'SETTINGS_GET',
+  })
 
-  if (!bookmarksResponse.ok || !foldersResponse.ok || !tagsResponse.ok) {
-    view = {...view, loading: false, error: 'Could not load the local library.'}
-  } else {
-    view = {
-      snapshot: {
-        bookmarks: bookmarksResponse.data,
-        folders: foldersResponse.data,
-        tags: tagsResponse.data,
-      },
-      loading: false,
-      error: '',
-    }
-  }
-
+  view = response.ok
+    ? {settings: response.data, loading: false, error: ''}
+    : {settings: null, loading: false, error: response.error}
   notify()
 }
 
 function subscribe(listener: () => void) {
   listeners.add(listener)
-  void loadLibrary()
-
+  void loadSettings()
   return () => listeners.delete(listener)
 }
 
@@ -65,74 +41,70 @@ function getSnapshot() {
   return view
 }
 
-function BookmarkCard({bookmark}: {bookmark: BookmarkPreview}) {
-  return (
-    <article className="bookmark_card">
-      <p className="bookmark_author">
-        {bookmark.author.name} <span>@{bookmark.author.username}</span>
-      </p>
-      <p className="bookmark_text">{bookmark.text}</p>
-      <div className="bookmark_tags">
-        {bookmark.tags.map((tag) => (
-          <span key={tag}>#{tag}</span>
-        ))}
-      </div>
-    </article>
-  )
+async function updateSetting(
+  key: keyof Omit<ExtensionSettings, 'key'>,
+  value: boolean
+) {
+  const response = await sendRuntimeMessage<ExtensionSettings>({
+    type: 'SETTINGS_UPDATE',
+    settings: {[key]: value},
+  })
+
+  if (response.ok) {
+    view = {...view, settings: response.data, error: ''}
+    notify()
+  }
 }
 
 export default function PopupApp() {
-  const {snapshot: library, loading, error} = useSyncExternalStore(
+  const {settings, loading, error} = useSyncExternalStore(
     subscribe,
     getSnapshot,
     getSnapshot
   )
-  const [query, setQuery] = useState('')
-  const deferredQuery = useDeferredValue(query.trim().toLowerCase())
-  const visibleBookmarks = library.bookmarks.filter((bookmark) => {
-    if (!deferredQuery) return true
-
-    return [
-      bookmark.text,
-      bookmark.author.name,
-      bookmark.author.username,
-      ...bookmark.tags,
-    ]
-      .join(' ')
-      .toLowerCase()
-      .includes(deferredQuery)
-  })
 
   return (
     <main className="popup_app">
       <header className="popup_header">
         <div>
           <p className="popup_eyebrow">x-bookmarks-organizer</p>
-          <h1>Bookmarks</h1>
+          <h1>Settings</h1>
         </div>
-        <span className="bookmark_count">{library.bookmarks.length}</span>
       </header>
 
-      <label className="search_label">
-        <span className="sr_only">Search bookmarks</span>
-        <input
-          type="search"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="Search bookmarks"
-        />
-      </label>
-
-      {loading && <p className="status_message">Loading library...</p>}
+      {loading && <p className="status_message">Loading settings...</p>}
       {error && <p className="status_message status_error">{error}</p>}
-      {!loading && !error && visibleBookmarks.length === 0 && (
-        <p className="status_message">No bookmarks found.</p>
+
+      {settings && (
+        <section className="settings_section" aria-label="Extension settings">
+          <label className="setting_row">
+            <span>
+              <strong>Page integration</strong>
+              <small>Replace the default bookmark view on X.</small>
+            </span>
+            <input
+              type="checkbox"
+              checked={settings.pageIntegration}
+              onChange={(event) =>
+                void updateSetting('pageIntegration', event.target.checked)
+              }
+            />
+          </label>
+          <label className="setting_row">
+            <span>
+              <strong>Automatic sync</strong>
+              <small>Refresh local bookmarks in the background.</small>
+            </span>
+            <input
+              type="checkbox"
+              checked={settings.autoSync}
+              onChange={(event) =>
+                void updateSetting('autoSync', event.target.checked)
+              }
+            />
+          </label>
+        </section>
       )}
-      <section className="bookmark_list" aria-label="Bookmarks">
-        {visibleBookmarks.map((bookmark) => (
-          <BookmarkCard key={bookmark.id} bookmark={bookmark} />
-        ))}
-      </section>
     </main>
   )
 }

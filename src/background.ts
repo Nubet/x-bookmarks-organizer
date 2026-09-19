@@ -1,25 +1,5 @@
-import type {
-  BookmarkPreview,
-  FolderPreview,
-  RuntimeMessage,
-  RuntimeResponse,
-} from './shared/types'
-
-const folders: FolderPreview[] = [{id: 'folder-reading', name: 'Reading'}]
-
-const bookmarks: BookmarkPreview[] = [
-  {
-    id: 'bookmark-1',
-    tweetId: 'demo-1',
-    text: 'A local-first library makes saved posts useful long after the timeline moves on.',
-    author: {name: 'Demo account', username: 'demo'},
-    tags: ['product', 'offline'],
-    folderIds: ['folder-reading'],
-    createdAt: Date.now(),
-  },
-]
-
-const tags = [...new Set(bookmarks.flatMap((bookmark) => bookmark.tags))]
+import type {RuntimeMessage, RuntimeResponse} from './shared/types'
+import {getLibrary, getSettings, updateSettings} from './storage/repositories'
 
 chrome.runtime.onMessage.addListener(
   (
@@ -27,23 +7,29 @@ chrome.runtime.onMessage.addListener(
     _sender,
     sendResponse: (response: RuntimeResponse<unknown>) => void
   ) => {
-    switch (message.type) {
-      case 'BOOKMARKS_LIST':
-        sendResponse({ok: true, data: bookmarks})
-        break
-      case 'FOLDER_LIST':
-        sendResponse({ok: true, data: folders})
-        break
-      case 'TAG_LIST':
-        sendResponse({ok: true, data: tags})
-        break
-      case 'SYNC_START':
-        sendResponse({ok: true, data: {status: 'not-implemented'}})
-        break
-      default:
-        sendResponse({ok: false, error: 'Unsupported runtime message'})
-    }
-
+    void handleMessage(message).then(sendResponse)
     return true
   }
 )
+
+async function handleMessage(
+  message: RuntimeMessage
+): Promise<RuntimeResponse<unknown>> {
+  try {
+    switch (message.type) {
+      case 'LIBRARY_GET':
+        return {ok: true, data: await getLibrary()}
+      case 'SETTINGS_GET':
+        return {ok: true, data: await getSettings()}
+      case 'SETTINGS_UPDATE':
+        return {ok: true, data: await updateSettings(message.settings)}
+      case 'SYNC_START':
+        return {ok: true, data: {status: 'not-implemented'}}
+    }
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : 'Storage operation failed',
+    }
+  }
+}
