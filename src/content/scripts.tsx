@@ -1,8 +1,10 @@
 import {sendRuntimeMessage} from '../shared/runtime'
 import type {ExtensionSettings} from '../shared/types'
 import {observeBookmarkButtons, saveCapturedBookmark} from './bookmark-observer'
+import {getLatestTransactionId, installPageScript} from './page-bridge'
 
 export default function initial() {
+  installPageScript()
   let stopObserving = () => {}
   let disposed = false
 
@@ -21,5 +23,7 @@ export default function initial() {
     if (disposed || !response.ok || !response.data.pageIntegration) return
 
     stopObserving = observeBookmarkButtons(saveCapturedBookmark)
+
+    void getLatestTransactionId().catch(() => undefined)
   }
 }
