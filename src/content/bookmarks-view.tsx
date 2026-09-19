@@ -70,10 +70,10 @@ export function mountBookmarksView() {
   const root = createRoot(rootElement)
   root.render(<BookmarksView />)
 
-  return () => {
+  return (preserveLayout = false) => {
     root.unmount()
     restoreNativeColumn(column)
-    restoreWideLayout()
+    if (!preserveLayout) restoreWideLayout()
     rootElement.remove()
   }
 }
@@ -115,7 +115,12 @@ export function watchIntegrationToggle() {
     if (!button && hasRouteRelevantMutation(mutations)) mount()
   })
   const target = findRouteObservationTarget()
-  if (target) observer.observe(target, {childList: true, subtree: true})
+  if (target) observer.observe(target, {
+    attributes: true,
+    attributeFilter: ['data-testid'],
+    childList: true,
+    subtree: true,
+  })
   mount()
 
   return () => {
@@ -126,7 +131,7 @@ export function watchIntegrationToggle() {
 }
 
 export function watchBookmarksRoute() {
-  let stopView: () => void = () => {}
+  let stopView: (preserveLayout?: boolean) => void = () => {}
   let mounted = false
   let syncFrame: number | null = null
 
@@ -144,8 +149,9 @@ export function watchBookmarksRoute() {
       return
     }
     if (!shouldMount && !mounted) return
+    if (shouldMount && !findPrimaryColumn()) return
 
-    stopView()
+    stopView(shouldMount)
     mounted = false
     stopView = shouldMount ? mountBookmarksView() : () => {}
     mounted = Boolean(document.getElementById(ROOT_ID))
@@ -163,7 +169,12 @@ export function watchBookmarksRoute() {
     if (hasRouteRelevantMutation(mutations)) scheduleSync()
   })
   const target = findRouteObservationTarget()
-  if (target) observer.observe(target, {childList: true, subtree: true})
+  if (target) observer.observe(target, {
+    attributes: true,
+    attributeFilter: ['data-testid'],
+    childList: true,
+    subtree: true,
+  })
   sync()
 
   return () => {
@@ -183,18 +194,23 @@ function findPrimaryColumn() {
 }
 
 function findRouteObservationTarget() {
-  return document.querySelector<HTMLElement>('main[role="main"]') ?? document.body
+  return document.body
 }
 
 function hasRouteRelevantMutation(mutations: MutationRecord[]) {
   return mutations.some((mutation) =>
-    [...mutation.addedNodes, ...mutation.removedNodes].some((node) => {
-      if (!(node instanceof Element)) return false
-      return node.id === ROOT_ID
-        || node.querySelector(`#${ROOT_ID}`) !== null
-        || node.matches('[data-testid="primaryColumn"]')
-        || node.querySelector('[data-testid="primaryColumn"]') !== null
-    })
+    (mutation.type === 'attributes'
+      ? mutation.target instanceof Element && (
+        mutation.target.matches('[data-testid="primaryColumn"]')
+        || mutation.target.closest('[data-testid="primaryColumn"]') !== null
+      )
+      : [...mutation.addedNodes, ...mutation.removedNodes].some((node) => {
+          if (!(node instanceof Element)) return false
+          return node.id === ROOT_ID
+            || node.querySelector(`#${ROOT_ID}`) !== null
+            || node.matches('[data-testid="primaryColumn"]')
+            || node.querySelector('[data-testid="primaryColumn"]') !== null
+      }))
   )
 }
 

@@ -10,6 +10,8 @@ export default function initial() {
   let stopBookmarksView = () => {}
   let stopRouteChanges = () => {}
   let refreshOrganizer = refreshBookmarksView
+  let integrationEnabled: boolean | null = null
+  let viewActive = false
   let disposed = false
 
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
@@ -27,6 +29,7 @@ export default function initial() {
     return true
   })
 
+  stopRouteChanges = watchRouteChanges(syncOrganizer)
   void start()
 
   return () => {
@@ -43,36 +46,32 @@ export default function initial() {
 
     if (disposed || !response.ok) return
 
-    const integrationEnabled = response.data.pageIntegration
+    integrationEnabled = response.data.pageIntegration
 
     if (integrationEnabled) {
       stopObserving = observeBookmarkButtons(saveCapturedBookmark)
     }
 
-    let viewActive = false
-    const mountOrganizer = () => {
-      if (viewActive || !isBookmarksRoute()) return
-      viewActive = true
-      stopBookmarksView = integrationEnabled
-        ? watchBookmarksRoute()
-        : watchIntegrationToggle()
-    }
-
-    const syncOrganizer = () => {
-      if (!isBookmarksRoute()) {
-        if (viewActive) {
-          stopBookmarksView()
-          stopBookmarksView = () => {}
-          viewActive = false
-        }
-        return
-      }
-
-      mountOrganizer()
-    }
-
-    stopRouteChanges = watchRouteChanges(syncOrganizer)
     syncOrganizer()
+  }
+
+  function syncOrganizer() {
+    if (integrationEnabled === null) return
+
+    if (!isBookmarksRoute()) {
+      if (viewActive) {
+        stopBookmarksView()
+        stopBookmarksView = () => {}
+        viewActive = false
+      }
+      return
+    }
+
+    if (viewActive) return
+    viewActive = true
+    stopBookmarksView = integrationEnabled
+      ? watchBookmarksRoute()
+      : watchIntegrationToggle()
   }
 
   async function runSync() {
