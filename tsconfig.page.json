@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "noEmitOnError": true,
+    "allowImportingTsExtensions": false,
+    "outDir": "./public/page",
+    "rootDir": "./src/page",
+    "declaration": false,
+    "sourceMap": false
+  },
+  "include": ["./src/page/page-script.ts"]
+}

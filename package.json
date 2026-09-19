@@ -18,13 +18,14 @@
     "typescript": "7.0.2"
   },
   "scripts": {
-    "dev": "extension dev",
-    "start": "extension start",
-    "build": "extension build",
+    "build:page": "tsc -p tsconfig.page.json",
+    "dev": "npm run build:page && extension dev",
+    "start": "npm run build:page && extension start",
+    "build": "npm run build:page && extension build",
     "preview": "extension preview",
-    "build:chrome": "extension build --browser chrome",
-    "build:firefox": "extension build --browser firefox",
-    "build:edge": "extension build --browser edge"
+    "build:chrome": "npm run build:page && extension build --browser chrome",
+    "build:firefox": "npm run build:page && extension build --browser firefox",
+    "build:edge": "npm run build:page && extension build --browser edge"
   },
   "packageManager": "npm@11.13.0"
 }
