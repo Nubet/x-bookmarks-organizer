@@ -12,6 +12,7 @@ const HIDDEN_ATTRIBUTE = 'data-bookmarks-organizer-hidden'
 const WIDE_ATTRIBUTE = 'data-bookmarks-organizer-wide'
 const monthFormatter = new Intl.DateTimeFormat('en-US', {month: 'long', year: 'numeric'})
 const dateFormatter = new Intl.DateTimeFormat(undefined, {month: 'short', day: 'numeric'})
+const urlPattern = /(?:https?:\/\/|www\.)\S+/i
 
 interface LibraryState {
   snapshot: LibrarySnapshot | null
@@ -20,7 +21,7 @@ interface LibraryState {
 }
 
 type ViewMode = 'bookmarks' | 'authors'
-type MediaType = 'all' | 'image' | 'video' | 'text'
+type MediaType = 'all' | 'image' | 'video' | 'link' | 'text'
 type SortMode = 'sync-desc' | 'posted-desc'
 
 function SortDropdown({ sortMode, setSortMode, startTransition }: { sortMode: SortMode, setSortMode: (mode: SortMode) => void, startTransition: React.TransitionStartFunction }) {
@@ -563,6 +564,7 @@ function MediaTypeFilter({
     ['all', 'All media'],
     ['image', 'Images'],
     ['video', 'Videos'],
+    ['link', 'Links'],
     ['text', 'Text only'],
   ]
 
@@ -662,12 +664,17 @@ function EmptyState() {
 function filterBookmarks(bookmarks: BookmarkPreview[], query: string, folderId: string, tag: string, mediaType: MediaType) {
   const normalizedQuery = query.trim().toLowerCase()
   const usernameQuery = normalizedQuery.match(/^@([a-z0-9_]+)$/)?.[1]
+  const tagQuery = normalizedQuery.match(/^#([a-z0-9_]+)$/)?.[1]
   return bookmarks.filter((bookmark) => {
     const matchesQuery = usernameQuery
       ? bookmark.author.username.toLowerCase() === usernameQuery
-      : !normalizedQuery || `${bookmark.text} ${bookmark.author.name} ${bookmark.author.username}`.toLowerCase().includes(normalizedQuery)
+      : tagQuery
+        ? bookmark.tags.some((bookmarkTag) => bookmarkTag.replace(/^#/, '').toLowerCase() === tagQuery)
+          || bookmark.text.toLowerCase().includes(`#${tagQuery}`)
+        : !normalizedQuery || `${bookmark.text} ${bookmark.author.name} ${bookmark.author.username}`.toLowerCase().includes(normalizedQuery)
     const matchesMedia = mediaType === 'all'
       || (mediaType === 'text' && !bookmark.media?.length)
+      || (mediaType === 'link' && hasLink(bookmark))
       || bookmark.media?.some((media) => media.type === mediaType)
     return matchesQuery && matchesMedia && (folderId === 'all' || bookmark.folderIds.includes(folderId)) && (tag === 'all' || bookmark.tags.includes(tag))
   })
@@ -687,12 +694,17 @@ function getSortTimestamp(bookmark: BookmarkPreview, sortMode: SortMode) {
 }
 
 function countMedia(bookmarks: BookmarkPreview[]) {
-  const counts: Record<string, number> = {All: bookmarks.length, Images: 0, Videos: 0, 'Text only': 0}
+  const counts: Record<string, number> = {All: bookmarks.length, Images: 0, Videos: 0, Links: 0, 'Text only': 0}
   for (const bookmark of bookmarks) {
     if (!bookmark.media?.length) counts['Text only'] += 1
+    if (hasLink(bookmark)) counts.Links += 1
     for (const media of bookmark.media ?? []) counts[media.type === 'video' ? 'Videos' : 'Images'] += 1
   }
   return counts
+}
+
+function hasLink(bookmark: BookmarkPreview) {
+  return urlPattern.test(bookmark.text)
 }
 
 function summaryFor(mode: ViewMode, bookmarkCount: number, authorCount: number) {
