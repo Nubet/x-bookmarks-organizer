@@ -102,7 +102,7 @@ export function hasLink(bookmark: BookmarkPreview) {
   return urlPattern.test(bookmark.text)
 }
 
-function getSortTimestamp(bookmark: BookmarkPreview, sortMode: SortMode) {
+export function getSortTimestamp(bookmark: BookmarkPreview, sortMode: SortMode) {
   if (sortMode === 'sync-desc') return bookmark.updatedAt || null
   return Date.parse(bookmark.postedAt ?? '') || null
 }

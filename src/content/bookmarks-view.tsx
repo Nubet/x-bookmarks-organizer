@@ -4,9 +4,9 @@ import {sendRuntimeMessage} from '../shared/runtime'
 import type {BookmarkPreview, BookmarkSearchQuery, LibraryPage, LibrarySnapshot} from '../shared/types'
 import {fetchBookmarkPage, mutateBookmark} from './page-bridge'
 import {isBookmarksRoute} from './route'
-import {countMedia, createSearchIndex, filterBookmarks, sortBookmarks, type MediaType, type SortMode} from '../domain/search/search-bookmarks'
+import {countMedia, createSearchIndex, filterBookmarks, getSortTimestamp, sortBookmarks, type MediaType, type SortMode} from '../domain/search/search-bookmarks'
 import {createBookmarkActions} from '../application/bookmarks/bookmark-actions'
-import {BookmarkGrid} from './components/bookmark-grid'
+import {BookmarkGrid, EmptyState} from './components/bookmark-grid'
 import {BulkActions} from './components/bulk-actions'
 import {MediaTypeFilter} from './components/media-type-filter'
 import {SaveForm} from './components/save-form'
@@ -481,12 +481,16 @@ function BookmarksView() {
   const bookmarks = snapshot?.bookmarks ?? []
   const deferredQuery = useDeferredValue(query)
   const searchIndex = useMemo(() => createSearchIndex(bookmarks), [bookmarks])
+  const searchMatches = useMemo(
+    () => filterBookmarks(searchIndex, deferredQuery, folderId, tag, 'all'),
+    [deferredQuery, folderId, searchIndex, tag]
+  )
   const filteredBookmarks = useMemo(
     () => sortBookmarks(filterBookmarks(searchIndex, deferredQuery, folderId, tag, mediaType), sortMode),
     [deferredQuery, folderId, mediaType, searchIndex, sortMode, tag]
   )
   const authorGroups = useMemo(() => groupAuthors(filteredBookmarks), [filteredBookmarks])
-  const mediaCounts = useMemo(() => countMedia(bookmarks), [bookmarks])
+  const mediaCounts = useMemo(() => countMedia(searchMatches), [searchMatches])
   const monthlyBookmarks = useMemo(
     () => groupBookmarksByMonth(filteredBookmarks.slice(0, renderLimit), sortMode),
     [filteredBookmarks, renderLimit, sortMode]

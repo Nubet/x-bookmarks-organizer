@@ -56,7 +56,7 @@ function MediaPreview({media}: {media: NonNullable<BookmarkPreview['media']>[num
   return <img className="xbo:mb-4 xbo:block xbo:max-h-[260px] xbo:w-full xbo:rounded-lg xbo:bg-neutral-950 xbo:object-cover" src={media.url} alt="" loading="lazy" />
 }
 
-function EmptyState() {
+export function EmptyState() {
   return <div className="xbo:mx-auto xbo:my-16 xbo:grid xbo:max-w-md xbo:gap-4 xbo:rounded-lg xbo:bg-neutral-900 xbo:p-12 xbo:text-center xbo:text-neutral-500"><strong className="xbo:text-xl xbo:leading-7 xbo:text-white">No bookmarks here</strong><span>Save a post on X or change your search.</span></div>
 }
 
