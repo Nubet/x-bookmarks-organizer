@@ -20,6 +20,11 @@ export interface BookmarkCapture {
   author: BookmarkPreview['author']
 }
 
+export interface RemoteBookmarkPage {
+  bookmarks: BookmarkCapture[]
+  nextCursor: string | null
+}
+
 export interface FolderPreview {
   id: string
   name: string
@@ -40,9 +45,11 @@ export interface ExtensionSettings {
 export type RuntimeMessage =
   | {type: 'LIBRARY_GET'}
   | {type: 'BOOKMARK_SAVE'; bookmark: BookmarkCapture}
+  | {type: 'BOOKMARKS_SYNC'; bookmarks: BookmarkCapture[]}
   | {type: 'SETTINGS_GET'}
   | {type: 'SETTINGS_UPDATE'; settings: Partial<ExtensionSettings>}
   | {type: 'SYNC_START'}
+  | {type: 'SYNC_RUN'}
 
 export type RuntimeResponse<T> =
   | {ok: true; data: T}

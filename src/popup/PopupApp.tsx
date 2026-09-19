@@ -6,9 +6,17 @@ interface SettingsView {
   settings: ExtensionSettings | null
   loading: boolean
   error: string
+  syncing: boolean
+  syncMessage: string
 }
 
-let view: SettingsView = {settings: null, loading: false, error: ''}
+let view: SettingsView = {
+  settings: null,
+  loading: false,
+  error: '',
+  syncing: false,
+  syncMessage: '',
+}
 const listeners = new Set<() => void>()
 
 function notify() {
@@ -26,8 +34,8 @@ async function loadSettings() {
   })
 
   view = response.ok
-    ? {settings: response.data, loading: false, error: ''}
-    : {settings: null, loading: false, error: response.error}
+    ? {...view, settings: response.data, loading: false, error: ''}
+    : {...view, settings: null, loading: false, error: response.error}
   notify()
 }
 
@@ -35,6 +43,17 @@ function subscribe(listener: () => void) {
   listeners.add(listener)
   void loadSettings()
   return () => listeners.delete(listener)
+}
+
+async function startSync() {
+  view = {...view, syncing: true, syncMessage: '', error: ''}
+  notify()
+
+  const response = await sendRuntimeMessage<{status: string}>({type: 'SYNC_START'})
+  view = response.ok
+    ? {...view, syncing: false, syncMessage: 'Sync started in the active X tab.'}
+    : {...view, syncing: false, error: response.error}
+  notify()
 }
 
 function getSnapshot() {
@@ -74,9 +93,18 @@ export default function PopupApp() {
 
       {loading && <p className="status_message">Loading settings...</p>}
       {error && <p className="status_message status_error">{error}</p>}
+      {view.syncMessage && <p className="status_message">{view.syncMessage}</p>}
 
       {settings && (
         <section className="settings_section" aria-label="Extension settings">
+          <button
+            className="sync_button"
+            type="button"
+            disabled={view.syncing}
+            onClick={() => void startSync()}
+          >
+            {view.syncing ? 'Starting sync...' : 'Sync now'}
+          </button>
           <label className="setting_row">
             <span>
               <strong>Page integration</strong>

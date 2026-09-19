@@ -74,3 +74,41 @@ export async function upsertCapturedBookmark(
 
   return bookmark
 }
+
+export async function upsertRemoteBookmarks(captures: BookmarkCapture[]) {
+  const now = Date.now()
+  const bookmarks = await database.transaction(
+    'rw',
+    database.bookmarks,
+    database.tags,
+    async () => {
+      const result = []
+
+      for (const capture of captures) {
+        const existing = await database.bookmarks.get(capture.tweetId)
+        const bookmark = {
+          id: capture.tweetId,
+          tweetId: capture.tweetId,
+          text: capture.text,
+          author: capture.author,
+          tags: existing?.tags ?? [],
+          folderIds: existing?.folderIds ?? [],
+          createdAt: existing?.createdAt ?? now,
+          updatedAt: now,
+          source: 'x',
+          needsApiUpdate: false,
+        } as const
+
+        await database.bookmarks.put(bookmark)
+        for (const tag of bookmark.tags) {
+          await database.tags.put({id: tag, name: tag})
+        }
+        result.push(bookmark)
+      }
+
+      return result
+    }
+  )
+
+  return bookmarks
+}
