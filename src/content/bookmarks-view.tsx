@@ -253,6 +253,18 @@ export function refreshBookmarksView() {
   void loadLibrary()
 }
 
+function removeBookmarkFromLibrary(tweetId: string) {
+  if (!state.snapshot) return
+  state = {
+    ...state,
+    snapshot: {
+      ...state.snapshot,
+      bookmarks: state.snapshot.bookmarks.filter((bookmark) => bookmark.tweetId !== tweetId),
+    },
+  }
+  notify()
+}
+
 function findPrimaryColumn() {
   return document.querySelector<HTMLElement>('[data-testid="primaryColumn"]')
 }
@@ -587,10 +599,10 @@ function BookmarksView() {
         await mutateBookmark('DELETE_BOOKMARK', bookmark.tweetId)
         const response = await sendRuntimeMessage({type: 'BOOKMARK_DELETE', tweetId: bookmark.tweetId})
         if (!response.ok) throw new Error(response.error)
+        removeBookmarkFromLibrary(bookmark.tweetId)
         removed += 1
       }
       setSelectedIds(new Set())
-      refreshBookmarksView()
       setActionMessage(`${removed} bookmark${removed === 1 ? '' : 's'} removed.`)
     } catch (reason) {
       setActionError(`${removed} removed. ${reason instanceof Error ? reason.message : 'Could not remove the selected bookmarks.'}`)
@@ -600,7 +612,6 @@ function BookmarksView() {
           for (const bookmark of selected.slice(0, removed)) next.delete(bookmark.tweetId)
           return next
         })
-        refreshBookmarksView()
       }
     } finally {
       setBulkRemoving(false)
@@ -727,7 +738,7 @@ const BookmarkCard = memo(function BookmarkCard({bookmark, selected, onToggle}: 
       .then(() => sendRuntimeMessage({type: 'BOOKMARK_DELETE', tweetId: bookmark.tweetId}))
       .then((response) => {
         if (!response.ok) throw new Error(response.error)
-        refreshBookmarksView()
+        removeBookmarkFromLibrary(bookmark.tweetId)
       })
       .catch((reason) => setError(reason instanceof Error ? reason.message : 'Could not remove bookmark.'))
       .finally(() => setRemoving(false))
