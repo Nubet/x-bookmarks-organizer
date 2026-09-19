@@ -564,7 +564,6 @@ interface AuthorGroup {
   name: string
   avatarUrl?: string
   count: number
-  lastSync: number
 }
 
 function groupAuthors(bookmarks: BookmarkPreview[]) {
@@ -576,7 +575,6 @@ function groupAuthors(bookmarks: BookmarkPreview[]) {
       name: bookmark.author.name,
       avatarUrl: bookmark.avatarUrl ?? existing?.avatarUrl,
       count: (existing?.count ?? 0) + 1,
-      lastSync: Math.max(existing?.lastSync ?? 0, bookmark.updatedAt),
     })
   }
   return [...groups.values()].sort((left, right) => right.count - left.count)
@@ -584,7 +582,7 @@ function groupAuthors(bookmarks: BookmarkPreview[]) {
 
 function AuthorGrid({authors}: {authors: AuthorGroup[]}) {
   if (authors.length === 0) return <EmptyState />
-  return <div className="xbo:grid xbo:grid-cols-1 xbo:items-start xbo:gap-4 xbo:px-6 xbo:pb-16 xbo:sm:grid-cols-2 xbo:lg:grid-cols-4 xbo:xl:grid-cols-6">{authors.map((author) => <article className="xbo:flex xbo:items-center xbo:gap-3 xbo:rounded-lg xbo:border xbo:border-white/10 xbo:bg-neutral-900 xbo:p-4" key={author.username}><img className="xbo:size-8 xbo:shrink-0 xbo:rounded-full xbo:bg-neutral-800 xbo:object-cover" src={author.avatarUrl} alt="" /><div className="xbo:min-w-0"><b className="xbo:block xbo:truncate xbo:text-sm xbo:leading-5 xbo:text-white">@{author.username}</b><span className="xbo:mt-1 xbo:block xbo:truncate xbo:font-mono xbo:text-xs xbo:tracking-widest xbo:text-neutral-500">{author.count} bookmarks</span><small className="xbo:mt-1 xbo:block xbo:truncate xbo:font-mono xbo:text-xs xbo:tracking-widest xbo:text-neutral-500">Last sync: {formatDate(author.lastSync)}</small></div></article>)}</div>
+  return <div className="xbo:grid xbo:grid-cols-1 xbo:items-start xbo:gap-4 xbo:px-6 xbo:pb-16 xbo:sm:grid-cols-2 xbo:lg:grid-cols-4 xbo:xl:grid-cols-6">{authors.map((author) => <article className="xbo:flex xbo:items-center xbo:gap-3 xbo:rounded-lg xbo:border xbo:border-white/10 xbo:bg-neutral-900 xbo:p-4" key={author.username}><img className="xbo:size-8 xbo:shrink-0 xbo:rounded-full xbo:bg-neutral-800 xbo:object-cover" src={author.avatarUrl} alt="" /><div className="xbo:min-w-0"><b className="xbo:block xbo:truncate xbo:text-sm xbo:leading-5 xbo:text-white">@{author.username}</b><span className="xbo:mt-1 xbo:block xbo:truncate xbo:font-mono xbo:text-xs xbo:tracking-widest xbo:text-neutral-500">{author.count} bookmarks</span></div></article>)}</div>
 }
 
 function EmptyState() {
