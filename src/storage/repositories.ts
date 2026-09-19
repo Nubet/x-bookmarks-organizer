@@ -1,10 +1,11 @@
 import {database} from './database'
 import type {
+  BookmarkSearchQuery,
   BookmarkCapture,
   ExtensionSettings,
   LibrarySnapshot,
 } from '../shared/types'
-import {createSearchTokens} from '../domain/search/search-bookmarks'
+import {createSearchIndex, createSearchTokens, filterBookmarks, sortBookmarks} from '../domain/search/search-bookmarks'
 
 const defaultSettings: ExtensionSettings = {
   key: 'default',
@@ -34,6 +35,17 @@ export async function getBookmarkPage(offset: number, limit: number) {
 
   const nextOffset = offset + bookmarks.length < total ? offset + bookmarks.length : null
   return {bookmarks, nextOffset, total}
+}
+
+export async function searchBookmarkPage(search: BookmarkSearchQuery, offset: number, limit: number) {
+  const bookmarks = await database.bookmarks.toArray()
+  const matches = sortBookmarks(
+    filterBookmarks(createSearchIndex(bookmarks), search.query, search.folderId, search.tag, search.mediaType),
+    search.sortMode
+  )
+  const page = matches.slice(offset, offset + limit)
+  const nextOffset = offset + page.length < matches.length ? offset + page.length : null
+  return {bookmarks: page, nextOffset, total: matches.length}
 }
 
 export async function getSettings(): Promise<ExtensionSettings> {

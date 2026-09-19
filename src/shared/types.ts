@@ -55,6 +55,17 @@ export interface LibraryPage {
   total: number
 }
 
+export type BookmarkMediaFilter = 'all' | 'image' | 'video' | 'link' | 'text'
+export type BookmarkSortMode = 'sync-desc' | 'posted-desc'
+
+export interface BookmarkSearchQuery {
+  query: string
+  folderId: string
+  tag: string
+  mediaType: BookmarkMediaFilter
+  sortMode: BookmarkSortMode
+}
+
 export interface ExtensionSettings {
   key: 'default'
   pageIntegration: boolean
@@ -64,6 +75,7 @@ export interface ExtensionSettings {
 export type RuntimeMessage =
   | {type: 'LIBRARY_GET'}
   | {type: 'LIBRARY_GET_PAGE'; offset: number; limit: number}
+  | {type: 'LIBRARY_SEARCH_PAGE'; offset: number; limit: number; search: BookmarkSearchQuery}
   | {type: 'BOOKMARK_SAVE'; bookmark: BookmarkCapture}
   | {type: 'BOOKMARK_DELETE'; tweetId: string}
   | {type: 'BOOKMARKS_SYNC'; bookmarks: BookmarkCapture[]}

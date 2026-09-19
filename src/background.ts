@@ -2,6 +2,7 @@ import type {RuntimeMessage, RuntimeResponse} from './shared/types'
 import {
   getLibrary,
   getBookmarkPage,
+  searchBookmarkPage,
   getSettings,
   updateSettings,
   upsertRemoteBookmarks,
@@ -27,6 +28,10 @@ async function handleMessage(
     switch (message.type) {
       case 'LIBRARY_GET':
         return {ok: true, data: await getLibrary()}
+      case 'LIBRARY_GET_PAGE':
+        return {ok: true, data: await getBookmarkPage(message.offset, message.limit)}
+      case 'LIBRARY_SEARCH_PAGE':
+        return {ok: true, data: await searchBookmarkPage(message.search, message.offset, message.limit)}
       case 'BOOKMARK_SAVE':
         return {ok: true, data: await upsertCapturedBookmark(message.bookmark)}
       case 'BOOKMARK_DELETE':

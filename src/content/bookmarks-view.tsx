@@ -1,7 +1,7 @@
 import {createRoot} from 'react-dom/client'
 import {useDeferredValue, useMemo, useState, useEffect, useRef, useSyncExternalStore, useTransition, type FormEvent} from 'react'
 import {sendRuntimeMessage} from '../shared/runtime'
-import type {BookmarkPreview, LibrarySnapshot} from '../shared/types'
+import type {BookmarkPreview, BookmarkSearchQuery, LibraryPage, LibrarySnapshot} from '../shared/types'
 import {fetchBookmarkPage, mutateBookmark} from './page-bridge'
 import {isBookmarksRoute} from './route'
 import {countMedia, createSearchIndex, filterBookmarks, sortBookmarks, type MediaType, type SortMode} from '../domain/search/search-bookmarks'
@@ -26,6 +26,7 @@ interface LibraryState {
   loadingMore: boolean
   error: string
   nextOffset: number | null
+  activeQuery: BookmarkSearchQuery | null
 }
 
 type ViewMode = 'bookmarks' | 'authors'
@@ -80,8 +81,9 @@ function SortDropdown({ sortMode, setSortMode, startTransition }: { sortMode: So
   )
 }
 
-let state: LibraryState = {snapshot: null, loading: false, loadingMore: false, error: '', nextOffset: null}
+let state: LibraryState = {snapshot: null, loading: false, loadingMore: false, error: '', nextOffset: null, activeQuery: null}
 let loaded = false
+let searchRequest = 0
 const listeners = new Set<() => void>()
 const bookmarkActions = createBookmarkActions({
   deleteRemote: async (tweetId) => {
@@ -111,14 +113,11 @@ function getSnapshot() {
 }
 
 async function loadLibrary() {
-  state = {snapshot: null, loading: true, loadingMore: false, error: '', nextOffset: null}
+  searchRequest += 1
+  state = {snapshot: null, loading: true, loadingMore: false, error: '', nextOffset: null, activeQuery: null}
   notify()
 
-  const response = await sendRuntimeMessage<{
-    bookmarks: BookmarkPreview[]
-    nextOffset: number | null
-    total: number
-  }>({type: 'LIBRARY_GET_PAGE', offset: 0, limit: LIBRARY_PAGE_SIZE})
+  const response = await sendRuntimeMessage<LibraryPage>({type: 'LIBRARY_GET_PAGE', offset: 0, limit: LIBRARY_PAGE_SIZE})
   state = response.ok
     ? {
         snapshot: {bookmarks: response.data.bookmarks, folders: [], tags: []},
@@ -126,23 +125,44 @@ async function loadLibrary() {
         loadingMore: false,
         error: '',
         nextOffset: response.data.nextOffset,
+        activeQuery: null,
       }
-    : {snapshot: null, loading: false, loadingMore: false, error: response.error, nextOffset: null}
+    : {snapshot: null, loading: false, loadingMore: false, error: response.error, nextOffset: null, activeQuery: null}
   notify()
 }
 
-async function loadMoreLibrary() {
+async function searchLibrary(search: BookmarkSearchQuery) {
+  const requestId = ++searchRequest
+  state = {...state, loading: true, loadingMore: false, error: '', nextOffset: null, activeQuery: search}
+  notify()
+
+  const response = await sendRuntimeMessage<LibraryPage>({type: 'LIBRARY_SEARCH_PAGE', offset: 0, limit: LIBRARY_PAGE_SIZE, search})
+  if (requestId !== searchRequest) return
+
+  state = response.ok
+    ? {
+        snapshot: {bookmarks: response.data.bookmarks, folders: state.snapshot?.folders ?? [], tags: state.snapshot?.tags ?? []},
+        loading: false,
+        loadingMore: false,
+        error: '',
+        nextOffset: response.data.nextOffset,
+        activeQuery: search,
+      }
+    : {...state, loading: false, loadingMore: false, error: response.error}
+  notify()
+}
+
+async function loadMoreLibrary(searchOverride?: BookmarkSearchQuery) {
   if (state.loading || state.loadingMore || state.nextOffset === null) return false
 
   const offset = state.nextOffset
+  const search = searchOverride ?? state.activeQuery
   state = {...state, loadingMore: true, error: ''}
   notify()
 
-  const response = await sendRuntimeMessage<{
-    bookmarks: BookmarkPreview[]
-    nextOffset: number | null
-    total: number
-  }>({type: 'LIBRARY_GET_PAGE', offset, limit: LIBRARY_PAGE_SIZE})
+  const response = search
+    ? await sendRuntimeMessage<LibraryPage>({type: 'LIBRARY_SEARCH_PAGE', offset, limit: LIBRARY_PAGE_SIZE, search})
+    : await sendRuntimeMessage<LibraryPage>({type: 'LIBRARY_GET_PAGE', offset, limit: LIBRARY_PAGE_SIZE})
 
   if (!response.ok) {
     state = {...state, loadingMore: false, error: response.error}
@@ -441,7 +461,7 @@ function groupBookmarksByMonth(bookmarks: BookmarkPreview[], sortMode: SortMode)
 }
 
 function BookmarksView() {
-  const {snapshot, loading, loadingMore, error, nextOffset} = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
+  const {snapshot, loading, loadingMore, error, nextOffset, activeQuery} = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
   const [mode, setMode] = useState<ViewMode>('bookmarks')
   const [query, setQuery] = useState('')
   const [folderId, setFolderId] = useState('all')
@@ -517,9 +537,18 @@ function BookmarksView() {
           <input
             className="xbo:box-border xbo:w-full xbo:rounded-lg xbo:border xbo:border-white/10 xbo:bg-neutral-900 xbo:px-4 xbo:py-3 xbo:text-base xbo:text-white xbo:outline-none xbo:focus:border-white"
             type="search"
-            placeholder="Search saved posts by keyword, author, tag or @username..."
+            placeholder="Search saved posts... Press Enter to search the full library"
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={(event) => {
+              const value = event.target.value
+              setQuery(value)
+              if (!value.trim() && activeQuery) refreshBookmarksView()
+            }}
+            onKeyDown={(event) => {
+              if (event.key !== 'Enter') return
+              event.preventDefault()
+              void searchLibrary({query, folderId, tag, mediaType, sortMode})
+            }}
           />
         </label>
         <MediaTypeFilter
@@ -603,7 +632,7 @@ function BookmarksView() {
                     return
                   }
 
-                  void loadMoreLibrary().then((loaded) => {
+                  void loadMoreLibrary(activeQuery ? {query, folderId, tag, mediaType, sortMode} : undefined).then((loaded) => {
                     if (loaded) setRenderLimit((current) => current + RENDER_PAGE_SIZE)
                   })
                 }}

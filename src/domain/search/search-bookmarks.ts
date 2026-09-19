@@ -1,7 +1,8 @@
-import type {BookmarkPreview} from '../../shared/types'
+import type {BookmarkMediaFilter, BookmarkPreview, BookmarkSearchQuery, BookmarkSortMode} from '../../shared/types'
 
-export type MediaType = 'all' | 'image' | 'video' | 'link' | 'text'
-export type SortMode = 'sync-desc' | 'posted-desc'
+export type MediaType = BookmarkMediaFilter
+export type SortMode = BookmarkSortMode
+export type SearchQuery = BookmarkSearchQuery
 
 export interface SearchDocument {
   bookmark: BookmarkPreview
