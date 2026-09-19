@@ -9,6 +9,15 @@ export interface BookmarkPreview {
   tags: string[]
   folderIds: string[]
   createdAt: number
+  updatedAt: number
+  source: 'x' | 'manual'
+  needsApiUpdate: boolean
+}
+
+export interface BookmarkCapture {
+  tweetId: string
+  text: string
+  author: BookmarkPreview['author']
 }
 
 export interface FolderPreview {
@@ -30,6 +39,7 @@ export interface ExtensionSettings {
 
 export type RuntimeMessage =
   | {type: 'LIBRARY_GET'}
+  | {type: 'BOOKMARK_SAVE'; bookmark: BookmarkCapture}
   | {type: 'SETTINGS_GET'}
   | {type: 'SETTINGS_UPDATE'; settings: Partial<ExtensionSettings>}
   | {type: 'SYNC_START'}

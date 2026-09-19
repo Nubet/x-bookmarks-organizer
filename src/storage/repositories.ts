@@ -1,5 +1,6 @@
 import {database} from './database'
 import type {
+  BookmarkCapture,
   ExtensionSettings,
   LibrarySnapshot,
 } from '../shared/types'
@@ -43,4 +44,33 @@ export async function updateSettings(
   }
   await database.settings.put(settings)
   return settings
+}
+
+export async function upsertCapturedBookmark(
+  capture: BookmarkCapture
+) {
+  const now = Date.now()
+  const existing = await database.bookmarks.get(capture.tweetId)
+  const bookmark = {
+    id: capture.tweetId,
+    tweetId: capture.tweetId,
+    text: capture.text,
+    author: capture.author,
+    tags: existing?.tags ?? [],
+    folderIds: existing?.folderIds ?? [],
+    createdAt: existing?.createdAt ?? now,
+    updatedAt: now,
+    source: existing?.source ?? 'x',
+    needsApiUpdate: true,
+  } as const
+
+  await database.transaction('rw', database.bookmarks, database.tags, async () => {
+    await database.bookmarks.put(bookmark)
+
+    for (const tag of bookmark.tags) {
+      await database.tags.put({id: tag, name: tag})
+    }
+  })
+
+  return bookmark
 }
