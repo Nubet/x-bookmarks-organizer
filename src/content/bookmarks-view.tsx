@@ -1,10 +1,15 @@
 import {createRoot} from 'react-dom/client'
-import {memo, useDeferredValue, useMemo, useState, useEffect, useRef, useSyncExternalStore, useTransition, type FormEvent} from 'react'
+import {useDeferredValue, useMemo, useState, useEffect, useRef, useSyncExternalStore, useTransition, type FormEvent} from 'react'
 import {sendRuntimeMessage} from '../shared/runtime'
 import type {BookmarkPreview, LibrarySnapshot} from '../shared/types'
 import {fetchBookmarkPage, mutateBookmark} from './page-bridge'
 import {isBookmarksRoute} from './route'
 import {countMedia, createSearchIndex, filterBookmarks, sortBookmarks, type MediaType, type SortMode} from '../domain/search/search-bookmarks'
+import {createBookmarkActions} from '../application/bookmarks/bookmark-actions'
+import {BookmarkGrid} from './components/bookmark-grid'
+import {BulkActions} from './components/bulk-actions'
+import {MediaTypeFilter} from './components/media-type-filter'
+import {SaveForm} from './components/save-form'
 import './bookmarks-view.css'
 
 const ROOT_ID = 'bookmarks-organizer-root'
@@ -14,7 +19,6 @@ const WIDE_ATTRIBUTE = 'data-bookmarks-organizer-wide'
 const INITIAL_RENDER_LIMIT = 100
 const RENDER_PAGE_SIZE = 100
 const monthFormatter = new Intl.DateTimeFormat('en-US', {month: 'long', year: 'numeric'})
-const dateFormatter = new Intl.DateTimeFormat(undefined, {month: 'short', day: 'numeric'})
 interface LibraryState {
   snapshot: LibrarySnapshot | null
   loading: boolean
@@ -76,6 +80,15 @@ function SortDropdown({ sortMode, setSortMode, startTransition }: { sortMode: So
 let state: LibraryState = {snapshot: null, loading: false, error: ''}
 let loaded = false
 const listeners = new Set<() => void>()
+const bookmarkActions = createBookmarkActions({
+  deleteRemote: async (tweetId) => {
+    await mutateBookmark('DELETE_BOOKMARK', tweetId)
+  },
+  deleteLocal: async (tweetId) => {
+    const response = await sendRuntimeMessage({type: 'BOOKMARK_DELETE', tweetId})
+    if (!response.ok) throw new Error(response.error)
+  },
+})
 
 function notify() {
   for (const listener of listeners) listener()
@@ -521,6 +534,7 @@ function BookmarksView() {
               <BookmarkGrid
                 bookmarks={group.bookmarks}
                 selectedIds={selectedIds}
+                onRemove={removeSingleBookmark}
                 onToggle={(tweetId) => setSelectedIds((current) => {
                   const next = new Set(current)
                   if (next.has(tweetId)) next.delete(tweetId)
@@ -596,6 +610,16 @@ function BookmarksView() {
     window.location.reload()
   }
 
+  async function removeSingleBookmark(tweetId: string) {
+    await bookmarkActions.deleteBookmark(tweetId)
+    removeBookmarkFromLibrary(tweetId)
+    setSelectedIds((current) => {
+      const next = new Set(current)
+      next.delete(tweetId)
+      return next
+    })
+  }
+
   async function removeSelectedBookmarks() {
     const selected = filteredBookmarks.filter((bookmark) => selectedIds.has(bookmark.tweetId))
     if (selected.length === 0 || !window.confirm(`Remove ${selected.length} selected bookmark${selected.length === 1 ? '' : 's'}?`)) return
@@ -606,13 +630,12 @@ function BookmarksView() {
     let removed = 0
 
     try {
-      for (const bookmark of selected) {
-        await mutateBookmark('DELETE_BOOKMARK', bookmark.tweetId)
-        const response = await sendRuntimeMessage({type: 'BOOKMARK_DELETE', tweetId: bookmark.tweetId})
-        if (!response.ok) throw new Error(response.error)
-        removeBookmarkFromLibrary(bookmark.tweetId)
-        removed += 1
-      }
+      const tweetIds = selected.map((bookmark) => bookmark.tweetId)
+      await bookmarkActions.deleteBookmarks(tweetIds, (count) => {
+        removed = count
+        removeBookmarkFromLibrary(tweetIds[count - 1])
+      })
+      removed = selected.length
       setSelectedIds(new Set())
       setActionMessage(`${removed} bookmark${removed === 1 ? '' : 's'} removed.`)
     } catch (reason) {
@@ -628,160 +651,6 @@ function BookmarksView() {
       setBulkRemoving(false)
     }
   }
-}
-
-function SaveForm({saving, onSubmit}: {saving: boolean; onSubmit: (event: FormEvent<HTMLFormElement>) => void}) {
-  return (
-    <form className="xbo:flex xbo:justify-center xbo:gap-3 xbo:p-6 xbo:pt-0 xbo:max-sm:flex-col" onSubmit={onSubmit}>
-      <input className="xbo:w-full xbo:max-w-md xbo:rounded-lg xbo:border xbo:border-white/10 xbo:bg-neutral-900 xbo:px-4 xbo:py-3 xbo:text-base xbo:text-white xbo:outline-0" name="tweetUrl" type="url" placeholder="Paste an X post URL" aria-label="X post URL" />
-      <button className="xbo:cursor-pointer xbo:rounded-full xbo:border xbo:border-white xbo:bg-white xbo:px-4 xbo:py-2 xbo:text-sm xbo:text-black xbo:disabled:cursor-wait xbo:disabled:opacity-60" type="submit" disabled={saving}>{saving ? 'Saving...' : 'Save post'}</button>
-    </form>
-  )
-}
-
-function MediaTypeFilter({
-  mediaCounts,
-  mediaType,
-  onMediaTypeChange,
-}: {
-  mediaCounts: Record<string, number>
-  mediaType: MediaType
-  onMediaTypeChange: (mediaType: MediaType) => void
-}) {
-  const mediaOptions: Array<[MediaType, string]> = [
-    ['all', 'All media'],
-    ['image', 'Images'],
-    ['video', 'Videos'],
-    ['link', 'Links'],
-    ['text', 'Text only'],
-  ]
-
-  return (
-    <div className="xbo:flex xbo:flex-wrap xbo:justify-center xbo:gap-2">
-      {mediaOptions.map(([value, label]) => (
-        <button
-          key={value}
-          className="xbo:cursor-pointer xbo:rounded-full xbo:border xbo:border-white/25 xbo:bg-transparent xbo:px-4 xbo:py-2 xbo:text-sm xbo:text-white xbo:transition xbo:hover:bg-neutral-800 xbo:data-[selected=true]:border-white xbo:data-[selected=true]:bg-neutral-800 xbo:data-[selected=true]:text-white"
-          data-selected={mediaType === value}
-          aria-pressed={mediaType === value}
-          type="button"
-          onClick={() => onMediaTypeChange(value)}
-        >
-          {label} <b>{value === 'all' ? mediaCounts.All : mediaCounts[label] ?? 0}</b>
-        </button>
-      ))}
-    </div>
-  )
-}
-
-function BulkActions({
-  selectedCount,
-  visibleCount,
-  removing,
-  onSelectAll,
-  onClear,
-  onRemove,
-}: {
-  selectedCount: number
-  visibleCount: number
-  removing: boolean
-  onSelectAll: () => void
-  onClear: () => void
-  onRemove: () => void
-}) {
-  return (
-    <div className="xbo:mx-6 xbo:mt-4 xbo:flex xbo:flex-wrap xbo:items-center xbo:gap-3 xbo:rounded-lg xbo:border xbo:border-white/10 xbo:bg-neutral-900 xbo:px-4 xbo:py-3">
-      <button
-        className="xbo:cursor-pointer xbo:rounded-full xbo:border xbo:border-white/25 xbo:bg-transparent xbo:px-3 xbo:py-1.5 xbo:text-sm xbo:text-white xbo:hover:bg-neutral-800 xbo:disabled:cursor-not-allowed xbo:disabled:opacity-50"
-        type="button"
-        onClick={onSelectAll}
-        disabled={visibleCount === 0 || removing}
-      >
-        {selectedCount === visibleCount && visibleCount > 0 ? 'Deselect visible' : 'Select visible'}
-      </button>
-      <span className="xbo:font-mono xbo:text-xs xbo:uppercase xbo:tracking-widest xbo:text-neutral-500">{selectedCount} selected</span>
-      {selectedCount > 0 && (
-        <>
-          <button
-            className="xbo:cursor-pointer xbo:rounded-full xbo:border xbo:border-white/25 xbo:bg-transparent xbo:px-3 xbo:py-1.5 xbo:text-sm xbo:text-white xbo:hover:bg-neutral-800 xbo:disabled:cursor-wait xbo:disabled:opacity-50"
-            type="button"
-            onClick={onClear}
-            disabled={removing}
-          >
-            Clear
-          </button>
-          <button
-            className="xbo:ml-auto xbo:cursor-pointer xbo:rounded-full xbo:border xbo:border-red-300/50 xbo:bg-red-950/40 xbo:px-3 xbo:py-1.5 xbo:text-sm xbo:text-red-100 xbo:hover:bg-red-900/60 xbo:disabled:cursor-wait xbo:disabled:opacity-50"
-            type="button"
-            onClick={onRemove}
-            disabled={removing}
-          >
-            {removing ? 'Removing...' : 'Remove selected'}
-          </button>
-        </>
-      )}
-    </div>
-  )
-}
-
-function BookmarkGrid({
-  bookmarks,
-  selectedIds,
-  onToggle,
-}: {
-  bookmarks: BookmarkPreview[]
-  selectedIds: Set<string>
-  onToggle: (tweetId: string) => void
-}) {
-  if (bookmarks.length === 0) return <EmptyState />
-
-  return <div className="xbo:columns-1 xbo:gap-6 xbo:px-6 xbo:pb-16 xbo:sm:columns-2 xbo:lg:columns-3 xbo:xl:columns-4">{bookmarks.map((bookmark) => <BookmarkCard key={bookmark.id} bookmark={bookmark} selected={selectedIds.has(bookmark.tweetId)} onToggle={onToggle} />)}</div>
-}
-
-const BookmarkCard = memo(function BookmarkCard({bookmark, selected, onToggle}: {bookmark: BookmarkPreview; selected: boolean; onToggle: (tweetId: string) => void}) {
-  const [removing, setRemoving] = useState(false)
-  const [error, setError] = useState('')
-
-  const remove = () => {
-    setRemoving(true)
-    setError('')
-    void mutateBookmark('DELETE_BOOKMARK', bookmark.tweetId)
-      .then(() => sendRuntimeMessage({type: 'BOOKMARK_DELETE', tweetId: bookmark.tweetId}))
-      .then((response) => {
-        if (!response.ok) throw new Error(response.error)
-        removeBookmarkFromLibrary(bookmark.tweetId)
-      })
-      .catch((reason) => setError(reason instanceof Error ? reason.message : 'Could not remove bookmark.'))
-      .finally(() => setRemoving(false))
-  }
-
-  return (
-    <article className={`xbo:mb-6 xbo:break-inside-avoid xbo:overflow-hidden xbo:rounded-lg xbo:border xbo:bg-neutral-900 xbo:p-6 ${selected ? 'xbo:border-white/60' : 'xbo:border-white/10'}`}>
-      <div className="xbo:flex xbo:items-center xbo:gap-3 xbo:text-sm xbo:leading-5 xbo:text-neutral-500">
-        <img className="xbo:size-8 xbo:shrink-0 xbo:rounded-full xbo:bg-neutral-800 xbo:object-cover" src={bookmark.avatarUrl} alt="" />
-        <span className="xbo:min-w-0 xbo:flex-1"><b>{bookmark.author.name}</b> @{bookmark.author.username} · {formatDate(bookmark.postedAt ?? bookmark.updatedAt)}</span>
-        <input
-          className="xbo:ml-auto xbo:size-4 xbo:shrink-0 xbo:accent-white"
-          type="checkbox"
-          checked={selected}
-          onChange={() => onToggle(bookmark.tweetId)}
-          aria-label={`Select post by @${bookmark.author.username}`}
-        />
-      </div>
-      <p className="xbo:my-4 xbo:whitespace-pre-wrap xbo:text-base xbo:leading-6 xbo:text-white">{bookmark.text || 'No text available'}</p>
-      {bookmark.media?.[0] && <MediaPreview media={bookmark.media[0]} />}
-      <div className="xbo:mt-6 xbo:flex xbo:items-center xbo:justify-between xbo:gap-3 xbo:border-t xbo:border-white/10 xbo:pt-4">
-        <a className="xbo:rounded-full xbo:border xbo:border-white/25 xbo:px-4 xbo:py-2 xbo:text-sm xbo:text-white xbo:no-underline xbo:hover:bg-neutral-800" href={`https://x.com/${bookmark.author.username}/status/${bookmark.tweetId}`} target="_blank" rel="noreferrer">Open ↗</a>
-        <button className="xbo:cursor-pointer xbo:rounded-full xbo:border xbo:border-white/25 xbo:bg-transparent xbo:px-4 xbo:py-2 xbo:text-sm xbo:text-white xbo:hover:bg-neutral-800 xbo:disabled:cursor-wait xbo:disabled:opacity-60" type="button" onClick={remove} disabled={removing}>{removing ? 'Removing...' : 'Remove'}</button>
-      </div>
-      {error && <p className="xbo:mt-4 xbo:rounded-lg xbo:border xbo:border-white/10 xbo:bg-neutral-800 xbo:p-2 xbo:text-sm xbo:text-white">{error}</p>}
-    </article>
-  )
-})
-
-function MediaPreview({media}: {media: NonNullable<BookmarkPreview['media']>[number]}) {
-  if (media.type === 'video') return <video className="xbo:mb-4 xbo:block xbo:max-h-[260px] xbo:w-full xbo:rounded-lg xbo:bg-neutral-950 xbo:object-cover" controls preload="none" poster={media.previewUrl}><source src={media.url} /></video>
-  return <img className="xbo:mb-4 xbo:block xbo:max-h-[260px] xbo:w-full xbo:rounded-lg xbo:bg-neutral-950 xbo:object-cover" src={media.url} alt="" loading="lazy" />
 }
 
 interface AuthorGroup {
@@ -810,19 +679,9 @@ function AuthorGrid({authors}: {authors: AuthorGroup[]}) {
   return <div className="xbo:grid xbo:grid-cols-1 xbo:items-start xbo:gap-4 xbo:px-6 xbo:pb-16 xbo:sm:grid-cols-2 xbo:lg:grid-cols-4 xbo:xl:grid-cols-6">{authors.map((author) => <article className="xbo:flex xbo:items-center xbo:gap-3 xbo:rounded-lg xbo:border xbo:border-white/10 xbo:bg-neutral-900 xbo:p-4" key={author.username}><img className="xbo:size-8 xbo:shrink-0 xbo:rounded-full xbo:bg-neutral-800 xbo:object-cover" src={author.avatarUrl} alt="" /><div className="xbo:min-w-0"><b className="xbo:block xbo:truncate xbo:text-sm xbo:leading-5 xbo:text-white">@{author.username}</b><span className="xbo:mt-1 xbo:block xbo:truncate xbo:font-mono xbo:text-xs xbo:tracking-widest xbo:text-neutral-500">{author.count} bookmarks</span></div></article>)}</div>
 }
 
-function EmptyState() {
-  return <div className="xbo:mx-auto xbo:my-16 xbo:grid xbo:max-w-md xbo:gap-4 xbo:rounded-lg xbo:bg-neutral-900 xbo:p-12 xbo:text-center xbo:text-neutral-500"><strong className="xbo:text-xl xbo:leading-7 xbo:text-white">No bookmarks here</strong><span>Save a post on X or change your search.</span></div>
-}
-
 function summaryFor(mode: ViewMode, bookmarkCount: number, authorCount: number) {
   if (mode === 'authors') return `${authorCount} authors · ${bookmarkCount} bookmarks`
   return `${bookmarkCount} bookmarks`
-}
-
-function formatDate(value: string | number) {
-  const timestamp = typeof value === 'number' ? value : Date.parse(value)
-  if (!Number.isFinite(timestamp)) return 'recently'
-  return dateFormatter.format(timestamp)
 }
 
 function extractTweetId(value: string) {
