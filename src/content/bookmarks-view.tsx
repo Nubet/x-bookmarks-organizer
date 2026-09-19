@@ -438,11 +438,11 @@ function BookmarksView() {
 
       <div className="xbo:flex xbo:flex-col xbo:items-center xbo:gap-4 xbo:border-b xbo:border-white/10 xbo:p-6">
         <label className="xbo:block xbo:w-full xbo:max-w-md">
-          <span className="xbo:absolute xbo:h-px xbo:w-px xbo:overflow-hidden xbo:[clip:rect(0,0,0,0)]">Search bookmarks</span>
+          <span className="xbo:absolute xbo:h-px xbo:w-px xbo:overflow-hidden xbo:[clip:rect(0,0,0,0)]">Search saved posts</span>
           <input
             className="xbo:box-border xbo:w-full xbo:rounded-lg xbo:border xbo:border-white/10 xbo:bg-neutral-900 xbo:px-4 xbo:py-3 xbo:text-base xbo:text-white xbo:outline-none xbo:focus:border-white"
             type="search"
-            placeholder="Search bookmarks — press / to focus"
+            placeholder="Search saved posts by keyword, author, tag or @username..."
             value={query}
             onChange={(event) => setQuery(event.target.value)}
           />
@@ -661,8 +661,11 @@ function EmptyState() {
 
 function filterBookmarks(bookmarks: BookmarkPreview[], query: string, folderId: string, tag: string, mediaType: MediaType) {
   const normalizedQuery = query.trim().toLowerCase()
+  const usernameQuery = normalizedQuery.match(/^@([a-z0-9_]+)$/)?.[1]
   return bookmarks.filter((bookmark) => {
-    const matchesQuery = !normalizedQuery || `${bookmark.text} ${bookmark.author.name} ${bookmark.author.username}`.toLowerCase().includes(normalizedQuery)
+    const matchesQuery = usernameQuery
+      ? bookmark.author.username.toLowerCase() === usernameQuery
+      : !normalizedQuery || `${bookmark.text} ${bookmark.author.name} ${bookmark.author.username}`.toLowerCase().includes(normalizedQuery)
     const matchesMedia = mediaType === 'all'
       || (mediaType === 'text' && !bookmark.media?.length)
       || bookmark.media?.some((media) => media.type === mediaType)
