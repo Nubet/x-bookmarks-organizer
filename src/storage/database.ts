@@ -25,6 +25,13 @@ export class BookmarkDatabase extends Dexie {
       tags: 'id,name',
       settings: 'key',
     })
+
+    this.version(2).stores({
+      bookmarks: 'id,tweetId,createdAt,updatedAt',
+      folders: 'id,name',
+      tags: 'id,name',
+      settings: 'key',
+    })
   }
 }
 

@@ -56,6 +56,9 @@ export async function upsertCapturedBookmark(
     tweetId: capture.tweetId,
     text: capture.text,
     author: capture.author,
+    avatarUrl: capture.avatarUrl ?? existing?.avatarUrl,
+    postedAt: capture.postedAt ?? existing?.postedAt,
+    media: capture.media ?? existing?.media,
     tags: existing?.tags ?? [],
     folderIds: existing?.folderIds ?? [],
     createdAt: existing?.createdAt ?? now,
@@ -82,15 +85,21 @@ export async function upsertRemoteBookmarks(captures: BookmarkCapture[]) {
     database.bookmarks,
     database.tags,
     async () => {
+      const existingRecords = await database.bookmarks.bulkGet(captures.map(c => c.tweetId))
       const result = []
+      const tagsToPut = new Set<string>()
 
-      for (const capture of captures) {
-        const existing = await database.bookmarks.get(capture.tweetId)
+      for (let i = 0; i < captures.length; i++) {
+        const capture = captures[i]
+        const existing = existingRecords[i]
         const bookmark = {
           id: capture.tweetId,
           tweetId: capture.tweetId,
           text: capture.text,
           author: capture.author,
+          avatarUrl: capture.avatarUrl ?? existing?.avatarUrl,
+          postedAt: capture.postedAt ?? existing?.postedAt,
+          media: capture.media ?? existing?.media,
           tags: existing?.tags ?? [],
           folderIds: existing?.folderIds ?? [],
           createdAt: existing?.createdAt ?? now,
@@ -99,11 +108,16 @@ export async function upsertRemoteBookmarks(captures: BookmarkCapture[]) {
           needsApiUpdate: false,
         } as const
 
-        await database.bookmarks.put(bookmark)
         for (const tag of bookmark.tags) {
-          await database.tags.put({id: tag, name: tag})
+          tagsToPut.add(tag)
         }
         result.push(bookmark)
+      }
+
+      await database.bookmarks.bulkPut(result)
+      const uniqueTags = Array.from(tagsToPut).map(tag => ({id: tag, name: tag}))
+      if (uniqueTags.length > 0) {
+        await database.tags.bulkPut(uniqueTags)
       }
 
       return result
@@ -111,4 +125,8 @@ export async function upsertRemoteBookmarks(captures: BookmarkCapture[]) {
   )
 
   return bookmarks
+}
+
+export async function deleteBookmark(tweetId: string) {
+  await database.bookmarks.delete(tweetId)
 }
