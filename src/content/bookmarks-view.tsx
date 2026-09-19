@@ -1,5 +1,5 @@
 import {createRoot} from 'react-dom/client'
-import {memo, useDeferredValue, useMemo, useState, useSyncExternalStore, useTransition, type FormEvent} from 'react'
+import {memo, useDeferredValue, useMemo, useState, useEffect, useRef, useSyncExternalStore, useTransition, type FormEvent} from 'react'
 import {sendRuntimeMessage} from '../shared/runtime'
 import type {BookmarkPreview, LibrarySnapshot} from '../shared/types'
 import {fetchBookmarkPage, mutateBookmark} from './page-bridge'
@@ -22,6 +22,57 @@ interface LibraryState {
 type ViewMode = 'bookmarks' | 'authors'
 type MediaType = 'all' | 'image' | 'video' | 'text'
 type SortMode = 'sync-desc' | 'posted-desc'
+
+function SortDropdown({ sortMode, setSortMode, startTransition }: { sortMode: SortMode, setSortMode: (mode: SortMode) => void, startTransition: React.TransitionStartFunction }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (ref.current && !ref.current.contains(event.target as Node)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  return (
+    <div className="xbo:relative" ref={ref}>
+      <button
+        onClick={() => setOpen(!open)}
+        className="xbo:flex xbo:items-center xbo:justify-between xbo:gap-2 xbo:w-40 xbo:rounded-full xbo:border xbo:border-white/20 xbo:bg-neutral-900 xbo:px-4 xbo:py-1.5 xbo:text-sm xbo:text-white xbo:transition-colors hover:xbo:border-white/40 xbo:cursor-pointer"
+      >
+        <span className="xbo:whitespace-nowrap">{sortMode === 'posted-desc' ? 'Tweet date ↓' : 'Sync date ↓'}</span>
+        <svg className="xbo:h-4 xbo:w-4 xbo:opacity-50 xbo:flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+      {open && (
+        <div className="xbo:absolute xbo:right-0 xbo:top-full xbo:z-10 xbo:mt-1 xbo:w-40 xbo:overflow-hidden xbo:rounded-xl xbo:border xbo:border-white/10 xbo:bg-neutral-900 xbo:shadow-xl">
+          <button
+            onClick={() => {
+              startTransition(() => setSortMode('posted-desc'))
+              setOpen(false)
+            }}
+            className={`xbo:block xbo:w-full xbo:px-4 xbo:py-2 xbo:text-left xbo:text-sm xbo:whitespace-nowrap xbo:transition-colors hover:xbo:bg-neutral-800 xbo:cursor-pointer ${sortMode === 'posted-desc' ? 'xbo:text-white xbo:font-medium' : 'xbo:text-neutral-400'}`}
+          >
+            Tweet date ↓
+          </button>
+          <button
+            onClick={() => {
+              startTransition(() => setSortMode('sync-desc'))
+              setOpen(false)
+            }}
+            className={`xbo:block xbo:w-full xbo:px-4 xbo:py-2 xbo:text-left xbo:text-sm xbo:whitespace-nowrap xbo:transition-colors hover:xbo:bg-neutral-800 xbo:cursor-pointer ${sortMode === 'sync-desc' ? 'xbo:text-white xbo:font-medium' : 'xbo:text-neutral-400'}`}
+          >
+            Sync date ↓
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
 
 let state: LibraryState = {snapshot: null, loading: false, error: ''}
 let loaded = false
@@ -89,10 +140,22 @@ export function watchIntegrationToggle() {
 
     const wrapper = document.createElement('div')
     wrapper.id = REENABLE_ID
-    wrapper.className = 'xbo:sticky xbo:top-0 xbo:z-10 xbo:flex xbo:justify-end xbo:border-b xbo:border-white/10 xbo:bg-neutral-950 xbo:p-2'
+    wrapper.className = 'xbo:font-sans xbo:sticky xbo:top-0 xbo:z-10 xbo:flex xbo:items-center xbo:justify-between xbo:border-b xbo:border-white/10 xbo:bg-neutral-950 xbo:px-4 xbo:py-3'
+    
+    const label = document.createElement('div')
+    label.className = 'xbo:flex xbo:items-center xbo:gap-3'
+    
+    const iconUrl = typeof chrome !== 'undefined' && chrome.runtime ? chrome.runtime.getURL('images/icon-512.png') : ''
+    const iconHtml = iconUrl ? `<img src="${iconUrl}" class="xbo:h-6 xbo:w-6 xbo:rounded-md xbo:object-cover" alt="Icon" />` : '<span class="xbo:text-base">🔖</span>'
+    
+    label.innerHTML = `${iconHtml} <div class="xbo:flex xbo:items-baseline xbo:gap-2"><span class="xbo:font-medium xbo:text-white xbo:text-base">X Bookmarks Organizer</span> <span class="xbo:text-neutral-500 xbo:text-sm">is disabled</span></div>`
+    wrapper.append(label)
+
     button = document.createElement('button')
     button.type = 'button'
-    button.textContent = 'Open organizer'
+    button.textContent = 'Enable'
+    button.className = 'xbo:cursor-pointer xbo:rounded-full xbo:border xbo:border-white xbo:bg-white xbo:px-4 xbo:py-2 xbo:text-sm xbo:font-medium xbo:text-black xbo:transition xbo:hover:opacity-90 xbo:disabled:opacity-60 xbo:disabled:cursor-wait'
+    button.style.color = '#000'
     button.addEventListener('click', async () => {
       button?.setAttribute('disabled', 'true')
       const response = await sendRuntimeMessage({
@@ -408,12 +471,9 @@ function BookmarksView() {
           <div className="xbo:my-6 xbo:flex xbo:items-center xbo:justify-between xbo:px-6">
             <div className="xbo:font-mono xbo:text-xs xbo:uppercase xbo:tracking-widest xbo:text-neutral-500">{summaryFor(mode, filteredBookmarks.length, authorGroups.length)}</div>
             {mode === 'bookmarks' && (
-              <div className="xbo:flex xbo:items-center xbo:gap-2">
+              <div className="xbo:flex xbo:items-center xbo:gap-3">
                 <span className="xbo:font-mono xbo:text-xs xbo:uppercase xbo:tracking-widest xbo:text-neutral-500">Sort:</span>
-                <select aria-label="Sort bookmarks" className="xbo:cursor-pointer xbo:rounded-full xbo:border xbo:border-white/25 xbo:bg-transparent xbo:px-3 xbo:py-1 xbo:text-sm xbo:text-white xbo:outline-none xbo:hover:bg-neutral-800" value={sortMode} onChange={(e) => startTransition(() => setSortMode(e.target.value as SortMode))}>
-                  <option value="posted-desc">Tweet date ↓</option>
-                  <option value="sync-desc">Sync date ↓</option>
-                </select>
+                <SortDropdown sortMode={sortMode} setSortMode={setSortMode} startTransition={startTransition} />
               </div>
             )}
           </div>
@@ -556,7 +616,7 @@ const BookmarkCard = memo(function BookmarkCard({bookmark}: {bookmark: BookmarkP
       <p className="xbo:my-4 xbo:whitespace-pre-wrap xbo:text-base xbo:leading-6 xbo:text-white">{bookmark.text || 'No text available'}</p>
       {bookmark.media?.[0] && <MediaPreview media={bookmark.media[0]} />}
       <div className="xbo:mt-6 xbo:flex xbo:items-center xbo:justify-between xbo:gap-3 xbo:border-t xbo:border-white/10 xbo:pt-4">
-        <a className="xbo:rounded-full xbo:border xbo:border-white/25 xbo:px-4 xbo:py-2 xbo:text-sm xbo:text-white xbo:no-underline xbo:hover:bg-neutral-800" href={`https://x.com/${bookmark.author.username}/status/${bookmark.tweetId}`} target="_blank" rel="noreferrer">Open on X ↗</a>
+        <a className="xbo:rounded-full xbo:border xbo:border-white/25 xbo:px-4 xbo:py-2 xbo:text-sm xbo:text-white xbo:no-underline xbo:hover:bg-neutral-800" href={`https://x.com/${bookmark.author.username}/status/${bookmark.tweetId}`} target="_blank" rel="noreferrer">Open ↗</a>
         <button className="xbo:cursor-pointer xbo:rounded-full xbo:border xbo:border-white/25 xbo:bg-transparent xbo:px-4 xbo:py-2 xbo:text-sm xbo:text-white xbo:hover:bg-neutral-800 xbo:disabled:cursor-wait xbo:disabled:opacity-60" type="button" onClick={remove} disabled={removing}>{removing ? 'Removing...' : 'Remove'}</button>
       </div>
       {error && <p className="xbo:mt-4 xbo:rounded-lg xbo:border xbo:border-white/10 xbo:bg-neutral-800 xbo:p-2 xbo:text-sm xbo:text-white">{error}</p>}
