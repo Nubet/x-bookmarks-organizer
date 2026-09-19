@@ -17,7 +17,8 @@
     "@types/react-dom": "^18.2.21",
     "extension": "^4.1.25",
     "tailwindcss": "4.3.3",
-    "typescript": "7.0.2"
+    "typescript": "7.0.2",
+    "vitest": "3.2.4"
   },
   "scripts": {
     "build:page": "tsc -p tsconfig.page.json",
@@ -27,7 +28,9 @@
     "preview": "extension preview",
     "build:chrome": "npm run build:page && extension build --browser chrome",
     "build:firefox": "npm run build:page && extension build --browser firefox",
-    "build:edge": "npm run build:page && extension build --browser edge"
+    "build:edge": "npm run build:page && extension build --browser edge",
+    "test": "vitest run",
+    "benchmark:search": "vitest bench benchmarks/search-bookmarks.bench.ts"
   },
   "packageManager": "npm@11.13.0"
 }
