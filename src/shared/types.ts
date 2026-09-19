@@ -12,12 +12,24 @@ export interface BookmarkPreview {
   updatedAt: number
   source: 'x' | 'manual'
   needsApiUpdate: boolean
+  avatarUrl?: string
+  postedAt?: string
+  media?: BookmarkMedia[]
+}
+
+export interface BookmarkMedia {
+  type: 'image' | 'video'
+  url: string
+  previewUrl?: string
 }
 
 export interface BookmarkCapture {
   tweetId: string
   text: string
   author: BookmarkPreview['author']
+  avatarUrl?: string
+  postedAt?: string
+  media?: BookmarkMedia[]
 }
 
 export interface RemoteBookmarkPage {
@@ -45,6 +57,7 @@ export interface ExtensionSettings {
 export type RuntimeMessage =
   | {type: 'LIBRARY_GET'}
   | {type: 'BOOKMARK_SAVE'; bookmark: BookmarkCapture}
+  | {type: 'BOOKMARK_DELETE'; tweetId: string}
   | {type: 'BOOKMARKS_SYNC'; bookmarks: BookmarkCapture[]}
   | {type: 'SETTINGS_GET'}
   | {type: 'SETTINGS_UPDATE'; settings: Partial<ExtensionSettings>}

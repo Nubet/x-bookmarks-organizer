@@ -34,6 +34,13 @@ export function fetchBookmarkPage(cursor: string | null) {
   }>('FETCH_BOOKMARKS', {cursor})
 }
 
+export function mutateBookmark(
+  operation: 'CREATE_BOOKMARK' | 'DELETE_BOOKMARK',
+  tweetId: string
+) {
+  return requestPageOperation<{success: true}>(operation, {tweetId})
+}
+
 function requestPageOperation<T>(operation: string, payload?: unknown) {
   const requestId = `request-${Date.now()}-${requestCounter++}`
 

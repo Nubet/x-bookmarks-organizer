@@ -5,6 +5,7 @@ import {
   updateSettings,
   upsertRemoteBookmarks,
   upsertCapturedBookmark,
+  deleteBookmark,
 } from './storage/repositories'
 
 chrome.runtime.onMessage.addListener(
@@ -27,6 +28,8 @@ async function handleMessage(
         return {ok: true, data: await getLibrary()}
       case 'BOOKMARK_SAVE':
         return {ok: true, data: await upsertCapturedBookmark(message.bookmark)}
+      case 'BOOKMARK_DELETE':
+        return {ok: true, data: await deleteBookmark(message.tweetId)}
       case 'BOOKMARKS_SYNC':
         return {ok: true, data: await upsertRemoteBookmarks(message.bookmarks)}
       case 'SETTINGS_GET':
@@ -47,17 +50,24 @@ async function handleMessage(
 }
 
 async function startSync() {
-  const tabs = await chrome.tabs.query({active: true, lastFocusedWindow: true})
-  const tab = tabs[0]
+  const tabs = await chrome.tabs.query({active: true})
 
-  if (!tab?.id || !isXUrl(tab.url)) {
-    throw new Error('Open an X tab before starting sync')
+  for (const tab of tabs) {
+    if (!tab.id) continue
+
+    let response: RuntimeResponse<unknown>
+    try {
+      response = await chrome.tabs.sendMessage(
+        tab.id,
+        {type: 'SYNC_RUN'} satisfies RuntimeMessage
+      )
+    } catch {
+      continue
+    }
+
+    if (response?.ok) return response.data
+    throw new Error(response?.error ?? 'Sync failed in the X tab')
   }
 
-  await chrome.tabs.sendMessage(tab.id, {type: 'SYNC_RUN'} satisfies RuntimeMessage)
-  return {status: 'started'}
-}
-
-function isXUrl(url: string | undefined) {
-  return Boolean(url && /^https:\/\/(www\.)?(x|twitter)\.com\//.test(url))
+  throw new Error('Open or reload an X tab before starting sync')
 }

@@ -51,7 +51,7 @@ async function startSync() {
 
   const response = await sendRuntimeMessage<{status: string}>({type: 'SYNC_START'})
   view = response.ok
-    ? {...view, syncing: false, syncMessage: 'Sync started in the active X tab.'}
+    ? {...view, syncing: false, syncMessage: response.data.status}
     : {...view, syncing: false, error: response.error}
   notify()
 }
