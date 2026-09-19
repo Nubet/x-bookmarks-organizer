@@ -3,6 +3,7 @@ import {memo, useDeferredValue, useMemo, useState, useSyncExternalStore, useTran
 import {sendRuntimeMessage} from '../shared/runtime'
 import type {BookmarkPreview, LibrarySnapshot} from '../shared/types'
 import {fetchBookmarkPage, mutateBookmark} from './page-bridge'
+import {isBookmarksRoute} from './route'
 import './bookmarks-view.css'
 
 const ROOT_ID = 'bookmarks-organizer-root'
@@ -110,13 +111,14 @@ export function watchIntegrationToggle() {
     column.prepend(wrapper)
   }
 
-  const observer = new MutationObserver(mount)
-  if (document.body) observer.observe(document.body, {childList: true, subtree: true})
-  const interval = window.setInterval(mount, 500)
+  const observer = new MutationObserver((mutations) => {
+    if (!button && hasRouteRelevantMutation(mutations)) mount()
+  })
+  const target = findRouteObservationTarget()
+  if (target) observer.observe(target, {childList: true, subtree: true})
   mount()
 
   return () => {
-    window.clearInterval(interval)
     observer.disconnect()
     document.getElementById(REENABLE_ID)?.remove()
     button = null
@@ -157,13 +159,14 @@ export function watchBookmarksRoute() {
     })
   }
 
-  const observer = new MutationObserver(scheduleSync)
-  observer.observe(document.body, {childList: true, subtree: true})
-  const interval = window.setInterval(scheduleSync, 500)
+  const observer = new MutationObserver((mutations) => {
+    if (hasRouteRelevantMutation(mutations)) scheduleSync()
+  })
+  const target = findRouteObservationTarget()
+  if (target) observer.observe(target, {childList: true, subtree: true})
   sync()
 
   return () => {
-    window.clearInterval(interval)
     observer.disconnect()
     if (syncFrame !== null) window.cancelAnimationFrame(syncFrame)
     stopView()
@@ -175,12 +178,24 @@ export function refreshBookmarksView() {
   void loadLibrary()
 }
 
-function isBookmarksRoute() {
-  return location.pathname === '/i/bookmarks' || location.pathname === '/i/history'
-}
-
 function findPrimaryColumn() {
   return document.querySelector<HTMLElement>('[data-testid="primaryColumn"]')
+}
+
+function findRouteObservationTarget() {
+  return document.querySelector<HTMLElement>('main[role="main"]') ?? document.body
+}
+
+function hasRouteRelevantMutation(mutations: MutationRecord[]) {
+  return mutations.some((mutation) =>
+    [...mutation.addedNodes, ...mutation.removedNodes].some((node) => {
+      if (!(node instanceof Element)) return false
+      return node.id === ROOT_ID
+        || node.querySelector(`#${ROOT_ID}`) !== null
+        || node.matches('[data-testid="primaryColumn"]')
+        || node.querySelector('[data-testid="primaryColumn"]') !== null
+    })
+  )
 }
 
 function hideNativeColumnChildren(column: HTMLElement, root: HTMLElement) {

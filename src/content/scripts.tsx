@@ -1,14 +1,15 @@
 import {sendRuntimeMessage} from '../shared/runtime'
 import type {ExtensionSettings} from '../shared/types'
 import {observeBookmarkButtons, saveCapturedBookmark} from './bookmark-observer'
-import {fetchBookmarkPage, getLatestTransactionId, installPageScript} from './page-bridge'
+import {fetchBookmarkPage} from './page-bridge'
 import {refreshBookmarksView, watchBookmarksRoute, watchIntegrationToggle} from './bookmarks-view'
+import {isBookmarksRoute, watchRouteChanges} from './route'
 
 export default function initial() {
-  installPageScript()
   let stopObserving = () => {}
   let stopBookmarksView = () => {}
-  let stopIntegrationToggle = () => {}
+  let stopRouteChanges = () => {}
+  let refreshOrganizer = refreshBookmarksView
   let disposed = false
 
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
@@ -32,7 +33,7 @@ export default function initial() {
     disposed = true
     stopObserving()
     stopBookmarksView()
-    stopIntegrationToggle()
+    stopRouteChanges()
   }
 
   async function start() {
@@ -42,15 +43,36 @@ export default function initial() {
 
     if (disposed || !response.ok) return
 
-    if (!response.data.pageIntegration) {
-      stopIntegrationToggle = watchIntegrationToggle()
-      return
+    const integrationEnabled = response.data.pageIntegration
+
+    if (integrationEnabled) {
+      stopObserving = observeBookmarkButtons(saveCapturedBookmark)
     }
 
-    stopObserving = observeBookmarkButtons(saveCapturedBookmark)
-    stopBookmarksView = watchBookmarksRoute()
+    let viewActive = false
+    const mountOrganizer = () => {
+      if (viewActive || !isBookmarksRoute()) return
+      viewActive = true
+      stopBookmarksView = integrationEnabled
+        ? watchBookmarksRoute()
+        : watchIntegrationToggle()
+    }
 
-    void getLatestTransactionId().catch(() => undefined)
+    const syncOrganizer = () => {
+      if (!isBookmarksRoute()) {
+        if (viewActive) {
+          stopBookmarksView()
+          stopBookmarksView = () => {}
+          viewActive = false
+        }
+        return
+      }
+
+      mountOrganizer()
+    }
+
+    stopRouteChanges = watchRouteChanges(syncOrganizer)
+    syncOrganizer()
   }
 
   async function runSync() {
@@ -70,7 +92,7 @@ export default function initial() {
 
     const response = await sendRuntimeMessage({type: 'BOOKMARKS_SYNC', bookmarks})
     if (!response.ok) throw new Error(response.error)
-    refreshBookmarksView()
+    refreshOrganizer()
     return {status: `Synced ${bookmarks.length} bookmarks`}
   }
 
