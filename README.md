@@ -1,4 +1,4 @@
-<img src="./banner/x-bookmarks-organizer-banner.png" alt="X Bookmarks Organizer banner" width="100%">
+<img src="./banner/x-bookmarks-organizer-banner.jpg" alt="X Bookmarks Organizer banner" width="100%">
 
 # X Bookmarks Organizer
 
