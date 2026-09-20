@@ -10,6 +10,7 @@ import {createFolderActions} from '../application/folders/folder-actions'
 import {BookmarkGrid, EmptyState} from './components/bookmark-grid'
 import {BulkActions} from './components/bulk-actions'
 import {FolderActionDialog, type FolderActionMode} from './components/folder-action-dialog'
+import {FolderFilter} from './components/folder-filter'
 import {MediaTypeFilter} from './components/media-type-filter'
 import {SaveForm} from './components/save-form'
 import './bookmarks-view.css'
@@ -503,7 +504,7 @@ function BookmarksView() {
   const {snapshot, folderSummaries, loading, loadingMore, error, nextOffset, activeQuery} = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
   const [mode, setMode] = useState<ViewMode>('bookmarks')
   const [query, setQuery] = useState('')
-  const folderId = 'all'
+  const [folderId, setFolderId] = useState('all')
   const tag = 'all'
   const [mediaType, setMediaType] = useState<MediaType>('all')
   const [sortMode, setSortMode] = useState<SortMode>('posted-desc')
@@ -598,7 +599,7 @@ function BookmarksView() {
             onChange={(event) => {
               const value = event.target.value
               setQuery(value)
-              if (!value.trim() && activeQuery) refreshBookmarksView()
+               if (!value.trim() && activeQuery) void searchLibrary({query: '', folderId, tag, mediaType, sortMode})
             }}
             onKeyDown={(event) => {
               if (event.key !== 'Enter') return
@@ -669,15 +670,24 @@ function BookmarksView() {
 
       {!loading && snapshot && (
         <>
-          <div className="xbo:my-6 xbo:flex xbo:items-center xbo:justify-between xbo:px-6">
-            <div className="xbo:font-mono xbo:text-xs xbo:uppercase xbo:tracking-widest xbo:text-neutral-500">{summaryFor(mode, filteredBookmarks.length, authorGroups.length)}</div>
-            {mode === 'bookmarks' && (
-              <div className="xbo:flex xbo:items-center xbo:gap-3">
-                <span className="xbo:font-mono xbo:text-xs xbo:uppercase xbo:tracking-widest xbo:text-neutral-500">Sort:</span>
-                <SortDropdown sortMode={sortMode} setSortMode={setSortMode} startTransition={startTransition} />
-              </div>
-            )}
-          </div>
+           <div className="xbo:my-6 xbo:flex xbo:flex-wrap xbo:items-center xbo:justify-between xbo:gap-4 xbo:px-6">
+             <div className="xbo:font-mono xbo:text-xs xbo:uppercase xbo:tracking-widest xbo:text-neutral-500">{summaryFor(mode, filteredBookmarks.length, authorGroups.length)}</div>
+             <div className="xbo:flex xbo:flex-wrap xbo:items-center xbo:gap-2">
+               <FolderFilter
+                 folderId={folderId}
+                 folders={folderSummaries}
+                 disabled={loading || loadingMore}
+                 onChange={(nextFolderId) => {
+                   setFolderId(nextFolderId)
+                   setSelectedIds(new Set())
+                   setRenderLimit(INITIAL_RENDER_LIMIT)
+                   setActionMessage('')
+                   void searchLibrary({query, folderId: nextFolderId, tag, mediaType, sortMode})
+                 }}
+               />
+               {mode === 'bookmarks' && <SortDropdown sortMode={sortMode} setSortMode={setSortMode} startTransition={startTransition} />}
+             </div>
+           </div>
 
           {mode === 'bookmarks' && filteredBookmarks.length === 0 && <EmptyState />}
           {mode === 'bookmarks' && monthlyBookmarks.map((group) => (
