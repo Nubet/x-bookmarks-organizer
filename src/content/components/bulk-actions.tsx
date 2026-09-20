@@ -7,6 +7,7 @@ export function BulkActions({
   onRemove,
   onAddToFolder,
   onRemoveFromFolder,
+  showRemoveFromFolder,
   updatingFolders,
 }: {
   selectedCount: number
@@ -17,6 +18,7 @@ export function BulkActions({
   onRemove: () => void
   onAddToFolder: () => void
   onRemoveFromFolder: () => void
+  showRemoveFromFolder: boolean
   updatingFolders: boolean
 }) {
   return (
@@ -29,7 +31,7 @@ export function BulkActions({
         <>
           <button className="xbo:cursor-pointer xbo:rounded-full xbo:border xbo:border-white/25 xbo:bg-transparent xbo:px-3 xbo:py-1.5 xbo:text-sm xbo:text-white xbo:hover:bg-neutral-800 xbo:disabled:cursor-wait xbo:disabled:opacity-50" type="button" onClick={onClear} disabled={removing || updatingFolders}>Clear</button>
           <button className="xbo:cursor-pointer xbo:rounded-full xbo:border xbo:border-white/35 xbo:bg-neutral-800 xbo:px-3 xbo:py-1.5 xbo:text-sm xbo:text-white xbo:hover:bg-neutral-700 xbo:disabled:cursor-wait xbo:disabled:opacity-50" type="button" onClick={onAddToFolder} disabled={removing || updatingFolders}>Add to folder</button>
-          <button className="xbo:cursor-pointer xbo:rounded-full xbo:border xbo:border-white/35 xbo:bg-neutral-800 xbo:px-3 xbo:py-1.5 xbo:text-sm xbo:text-white xbo:hover:bg-neutral-700 xbo:disabled:cursor-wait xbo:disabled:opacity-50" type="button" onClick={onRemoveFromFolder} disabled={removing || updatingFolders}>Remove from folder</button>
+          {showRemoveFromFolder && <button className="xbo:cursor-pointer xbo:rounded-full xbo:border xbo:border-white/35 xbo:bg-neutral-800 xbo:px-3 xbo:py-1.5 xbo:text-sm xbo:text-white xbo:hover:bg-neutral-700 xbo:disabled:cursor-wait xbo:disabled:opacity-50" type="button" onClick={onRemoveFromFolder} disabled={removing || updatingFolders}>Remove from folder</button>}
            <button className="xbo:ml-auto xbo:cursor-pointer xbo:rounded-full xbo:border xbo:border-red-300/50 xbo:bg-red-950/40 xbo:px-3 xbo:py-1.5 xbo:text-sm xbo:text-red-100 xbo:hover:bg-red-900/60 xbo:disabled:cursor-wait xbo:disabled:opacity-50" type="button" onClick={onRemove} disabled={removing || updatingFolders}>
             {removing ? 'Removing...' : 'Remove selected'}
           </button>

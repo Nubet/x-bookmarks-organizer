@@ -692,7 +692,8 @@ function BookmarksView() {
             }
             return next
           })}
-           onClear={() => setSelectedIds(new Set())}
+          showRemoveFromFolder={folderId !== 'all'}
+          onClear={() => setSelectedIds(new Set())}
            onRemove={() => void removeSelectedBookmarks()}
            onAddToFolder={() => {
              setActionError('')
