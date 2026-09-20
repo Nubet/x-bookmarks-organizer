@@ -981,7 +981,24 @@ function sortAuthors(authors: AuthorGroup[], sortMode: AuthorSortMode) {
 
 function AuthorGrid({authors, onViewBookmarks}: {authors: AuthorGroup[]; onViewBookmarks: (username: string) => void}) {
   if (authors.length === 0) return <EmptyState />
-  return <div className="xbo:grid xbo:grid-cols-1 xbo:items-start xbo:gap-4 xbo:px-6 xbo:pb-16 xbo:sm:grid-cols-2 xbo:lg:grid-cols-4 xbo:xl:grid-cols-6">{authors.map((author) => <article className="xbo:rounded-lg xbo:border xbo:border-white/10 xbo:bg-neutral-900" key={author.username}><div className="xbo:flex xbo:items-center xbo:gap-3 xbo:p-4"><img className="xbo:size-8 xbo:shrink-0 xbo:rounded-full xbo:bg-neutral-800 xbo:object-cover" src={author.avatarUrl} alt="" /><div className="xbo:min-w-0"><b className="xbo:block xbo:truncate xbo:text-sm xbo:leading-5 xbo:text-white">@{author.username}</b><span className="xbo:mt-1 xbo:block xbo:truncate xbo:font-mono xbo:text-xs xbo:tracking-widest xbo:text-neutral-500">{author.count} bookmarks</span></div></div><button className="xbo:w-full xbo:cursor-pointer xbo:border-t xbo:border-white/10 xbo:bg-transparent xbo:px-4 xbo:py-3 xbo:text-left xbo:text-sm xbo:text-neutral-300 xbo:hover:bg-neutral-800 xbo:hover:text-white" type="button" onClick={() => onViewBookmarks(author.username)}>View bookmarks →</button></article>)}</div>
+  return (
+    <div className="xbo:grid xbo:grid-cols-1 xbo:items-start xbo:gap-4 xbo:px-6 xbo:pb-16 xbo:sm:grid-cols-2 xbo:lg:grid-cols-4 xbo:xl:grid-cols-6">
+      {authors.map((author) => (
+        <button
+          key={author.username}
+          className="xbo:group xbo:flex xbo:w-full xbo:cursor-pointer xbo:items-center xbo:gap-4 xbo:rounded-lg xbo:border xbo:border-white/10 xbo:bg-neutral-900 xbo:p-4 xbo:text-left xbo:transition-all xbo:hover:border-white/20 xbo:hover:bg-neutral-800"
+          type="button"
+          onClick={() => onViewBookmarks(author.username)}
+        >
+          <img className="xbo:size-10 xbo:shrink-0 xbo:rounded-full xbo:bg-neutral-800 xbo:object-cover" src={author.avatarUrl} alt="" />
+          <div className="xbo:min-w-0 xbo:flex-1">
+            <b className="xbo:block xbo:truncate xbo:text-sm xbo:leading-5 xbo:text-white xbo:group-hover:text-blue-400 xbo:transition-colors">@{author.username}</b>
+            <span className="xbo:mt-1 xbo:block xbo:truncate xbo:font-mono xbo:text-xs xbo:tracking-widest xbo:text-neutral-500">{author.count} bookmarks</span>
+          </div>
+        </button>
+      ))}
+    </div>
+  )
 }
 
 function summaryFor(mode: ViewMode, bookmarkCount: number, authorCount: number) {
