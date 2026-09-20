@@ -4,7 +4,9 @@ import type {
   BookmarkCapture,
   ExtensionSettings,
   LibrarySnapshot,
+  FolderSummary,
 } from '../shared/types'
+import {addFolderIds, folderNameKey, normalizeFolderName, removeFolderIds} from '../domain/folders/folder-operations'
 import {createSearchIndex, createSearchTokens, filterBookmarks, shouldUseTokenIndex, sortBookmarks, tokenizeSearchQuery} from '../domain/search/search-bookmarks'
 
 const defaultSettings: ExtensionSettings = {
@@ -35,6 +37,57 @@ export async function getBookmarkPage(offset: number, limit: number) {
 
   const nextOffset = offset + bookmarks.length < total ? offset + bookmarks.length : null
   return {bookmarks, nextOffset, total}
+}
+
+export async function getFolderSummaries(): Promise<FolderSummary[]> {
+  const folders = await database.folders.orderBy('name').toArray()
+  return Promise.all(folders.map(async (folder) => ({
+    ...folder,
+    bookmarkCount: await database.bookmarks.where('folderIds').equals(folder.id).count(),
+  })))
+}
+
+export async function createFolder(name: string): Promise<FolderSummary> {
+  const normalizedName = normalizeFolderName(name)
+  if (!normalizedName) throw new Error('Folder name is required.')
+  if (normalizedName.length > 80) throw new Error('Folder name must be 80 characters or fewer.')
+
+  return database.transaction('rw', database.folders, database.bookmarks, async () => {
+    const existing = await database.folders.toArray()
+    if (existing.some((folder) => folderNameKey(folder.name) === folderNameKey(normalizedName))) {
+      throw new Error('A folder with this name already exists.')
+    }
+
+    const folder = {id: crypto.randomUUID(), name: normalizedName}
+    await database.folders.add(folder)
+    return {...folder, bookmarkCount: 0}
+  })
+}
+
+async function updateBookmarkFolders(
+  bookmarkIds: string[],
+  folderIds: string[],
+  update: (currentIds: string[]) => string[]
+) {
+  if (bookmarkIds.length === 0 || folderIds.length === 0) return []
+
+  return database.transaction('rw', database.bookmarks, database.folders, async () => {
+    const folders = await database.folders.bulkGet(folderIds)
+    if (folders.some((folder) => !folder)) throw new Error('One or more folders no longer exist.')
+
+    const bookmarks = await database.bookmarks.bulkGet(bookmarkIds)
+    const updated = bookmarks.flatMap((bookmark) => bookmark ? [{...bookmark, folderIds: update(bookmark.folderIds)}] : [])
+    await database.bookmarks.bulkPut(updated)
+    return updated
+  })
+}
+
+export function addBookmarksToFolders(bookmarkIds: string[], folderIds: string[]) {
+  return updateBookmarkFolders(bookmarkIds, folderIds, (currentIds) => addFolderIds(currentIds, folderIds))
+}
+
+export function removeBookmarksFromFolders(bookmarkIds: string[], folderIds: string[]) {
+  return updateBookmarkFolders(bookmarkIds, folderIds, (currentIds) => removeFolderIds(currentIds, folderIds))
 }
 
 export async function searchBookmarkPage(search: BookmarkSearchQuery, offset: number, limit: number) {

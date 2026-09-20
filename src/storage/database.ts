@@ -42,7 +42,14 @@ export class BookmarkDatabase extends Dexie {
     }).upgrade(async (transaction) => {
       await transaction.table('bookmarks').toCollection().modify((bookmark) => {
         bookmark.searchTokens = createSearchTokens(bookmark)
+        })
       })
+
+    this.version(4).stores({
+      bookmarks: 'id,tweetId,createdAt,updatedAt,postedAt,*searchTokens,*folderIds',
+      folders: 'id,name',
+      tags: 'id,name',
+      settings: 'key',
     })
   }
 }

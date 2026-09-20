@@ -43,6 +43,10 @@ export interface FolderPreview {
   name: string
 }
 
+export interface FolderSummary extends FolderPreview {
+  bookmarkCount: number
+}
+
 export interface LibrarySnapshot {
   bookmarks: BookmarkPreview[]
   folders: FolderPreview[]
@@ -76,6 +80,10 @@ export type RuntimeMessage =
   | {type: 'LIBRARY_GET'}
   | {type: 'LIBRARY_GET_PAGE'; offset: number; limit: number}
   | {type: 'LIBRARY_SEARCH_PAGE'; offset: number; limit: number; search: BookmarkSearchQuery}
+  | {type: 'FOLDERS_GET'}
+  | {type: 'FOLDER_CREATE'; name: string}
+  | {type: 'BOOKMARKS_ADD_TO_FOLDERS'; bookmarkIds: string[]; folderIds: string[]}
+  | {type: 'BOOKMARKS_REMOVE_FROM_FOLDERS'; bookmarkIds: string[]; folderIds: string[]}
   | {type: 'BOOKMARK_SAVE'; bookmark: BookmarkCapture}
   | {type: 'BOOKMARK_DELETE'; tweetId: string}
   | {type: 'BOOKMARKS_SYNC'; bookmarks: BookmarkCapture[]}

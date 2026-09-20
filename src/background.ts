@@ -8,6 +8,10 @@ import {
   upsertRemoteBookmarks,
   upsertCapturedBookmark,
   deleteBookmark,
+  getFolderSummaries,
+  createFolder,
+  addBookmarksToFolders,
+  removeBookmarksFromFolders,
 } from './storage/repositories'
 
 chrome.runtime.onMessage.addListener(
@@ -32,6 +36,14 @@ async function handleMessage(
         return {ok: true, data: await getBookmarkPage(message.offset, message.limit)}
       case 'LIBRARY_SEARCH_PAGE':
         return {ok: true, data: await searchBookmarkPage(message.search, message.offset, message.limit)}
+      case 'FOLDERS_GET':
+        return {ok: true, data: await getFolderSummaries()}
+      case 'FOLDER_CREATE':
+        return {ok: true, data: await createFolder(message.name)}
+      case 'BOOKMARKS_ADD_TO_FOLDERS':
+        return {ok: true, data: await addBookmarksToFolders(message.bookmarkIds, message.folderIds)}
+      case 'BOOKMARKS_REMOVE_FROM_FOLDERS':
+        return {ok: true, data: await removeBookmarksFromFolders(message.bookmarkIds, message.folderIds)}
       case 'BOOKMARK_SAVE':
         return {ok: true, data: await upsertCapturedBookmark(message.bookmark)}
       case 'BOOKMARK_DELETE':

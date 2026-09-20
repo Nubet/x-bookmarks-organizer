@@ -43,6 +43,16 @@
   transform: translateX(1.25rem);
 }
 
+#bookmarks-organizer-root [data-folder-submit="true"] {
+  background-color: #fff !important;
+  color: #000 !important;
+}
+
+#bookmarks-organizer-root [data-folder-submit="true"]:hover:not(:disabled) {
+  background-color: #e5e5e5 !important;
+  color: #000 !important;
+}
+
 body[data-bookmarks-organizer-wide="true"] main[role="main"] > div {
   width: 100% !important;
   max-width: 1300px !important;

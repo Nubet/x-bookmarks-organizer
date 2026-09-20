@@ -1,13 +1,15 @@
 import {createRoot} from 'react-dom/client'
 import {useDeferredValue, useMemo, useState, useEffect, useRef, useSyncExternalStore, useTransition, type FormEvent} from 'react'
 import {sendRuntimeMessage} from '../shared/runtime'
-import type {BookmarkPreview, BookmarkSearchQuery, LibraryPage, LibrarySnapshot} from '../shared/types'
+import type {BookmarkPreview, BookmarkSearchQuery, FolderSummary, LibraryPage, LibrarySnapshot} from '../shared/types'
 import {fetchBookmarkPage, mutateBookmark} from './page-bridge'
 import {isBookmarksRoute} from './route'
 import {countMedia, createSearchIndex, filterBookmarks, getSortTimestamp, sortBookmarks, type MediaType, type SortMode} from '../domain/search/search-bookmarks'
 import {createBookmarkActions} from '../application/bookmarks/bookmark-actions'
+import {createFolderActions} from '../application/folders/folder-actions'
 import {BookmarkGrid, EmptyState} from './components/bookmark-grid'
 import {BulkActions} from './components/bulk-actions'
+import {FolderActionDialog, type FolderActionMode} from './components/folder-action-dialog'
 import {MediaTypeFilter} from './components/media-type-filter'
 import {SaveForm} from './components/save-form'
 import './bookmarks-view.css'
@@ -22,6 +24,7 @@ const LIBRARY_PAGE_SIZE = 100
 const monthFormatter = new Intl.DateTimeFormat('en-US', {month: 'long', year: 'numeric'})
 interface LibraryState {
   snapshot: LibrarySnapshot | null
+  folderSummaries: FolderSummary[]
   loading: boolean
   loadingMore: boolean
   error: string
@@ -81,7 +84,7 @@ function SortDropdown({ sortMode, setSortMode, startTransition }: { sortMode: So
   )
 }
 
-let state: LibraryState = {snapshot: null, loading: false, loadingMore: false, error: '', nextOffset: null, activeQuery: null}
+let state: LibraryState = {folderSummaries: [], snapshot: null, loading: false, loadingMore: false, error: '', nextOffset: null, activeQuery: null}
 let loaded = false
 let searchRequest = 0
 const listeners = new Set<() => void>()
@@ -94,6 +97,28 @@ const bookmarkActions = createBookmarkActions({
     if (!response.ok) throw new Error(response.error)
   },
 })
+const folderActions = createFolderActions({
+  getFolders: async () => {
+    const response = await sendRuntimeMessage<FolderSummary[]>({type: 'FOLDERS_GET'})
+    if (!response.ok) throw new Error(response.error)
+    return response.data
+  },
+  createFolder: async (name) => {
+    const response = await sendRuntimeMessage<FolderSummary>({type: 'FOLDER_CREATE', name})
+    if (!response.ok) throw new Error(response.error)
+    return response.data
+  },
+  addBookmarksToFolders: async (bookmarkIds, folderIds) => {
+    const response = await sendRuntimeMessage<BookmarkPreview[]>({type: 'BOOKMARKS_ADD_TO_FOLDERS', bookmarkIds, folderIds})
+    if (!response.ok) throw new Error(response.error)
+    return response.data
+  },
+  removeBookmarksFromFolders: async (bookmarkIds, folderIds) => {
+    const response = await sendRuntimeMessage<BookmarkPreview[]>({type: 'BOOKMARKS_REMOVE_FROM_FOLDERS', bookmarkIds, folderIds})
+    if (!response.ok) throw new Error(response.error)
+    return response.data
+  },
+})
 
 function notify() {
   for (const listener of listeners) listener()
@@ -104,6 +129,7 @@ function subscribe(listener: () => void) {
   if (!loaded) {
     loaded = true
     void loadLibrary()
+    void loadFolderSummaries()
   }
   return () => listeners.delete(listener)
 }
@@ -114,12 +140,13 @@ function getSnapshot() {
 
 async function loadLibrary() {
   searchRequest += 1
-  state = {snapshot: null, loading: true, loadingMore: false, error: '', nextOffset: null, activeQuery: null}
+  state = {folderSummaries: state.folderSummaries, snapshot: null, loading: true, loadingMore: false, error: '', nextOffset: null, activeQuery: null}
   notify()
 
   const response = await sendRuntimeMessage<LibraryPage>({type: 'LIBRARY_GET_PAGE', offset: 0, limit: LIBRARY_PAGE_SIZE})
   state = response.ok
     ? {
+        folderSummaries: state.folderSummaries,
         snapshot: {bookmarks: response.data.bookmarks, folders: [], tags: []},
         loading: false,
         loadingMore: false,
@@ -127,8 +154,19 @@ async function loadLibrary() {
         nextOffset: response.data.nextOffset,
         activeQuery: null,
       }
-    : {snapshot: null, loading: false, loadingMore: false, error: response.error, nextOffset: null, activeQuery: null}
+    : {folderSummaries: state.folderSummaries, snapshot: null, loading: false, loadingMore: false, error: response.error, nextOffset: null, activeQuery: null}
   notify()
+}
+
+async function loadFolderSummaries() {
+  try {
+    const folders = await folderActions.getFolders()
+    state = {...state, folderSummaries: folders}
+    notify()
+  } catch (reason) {
+    state = {...state, error: reason instanceof Error ? reason.message : 'Could not load folders.'}
+    notify()
+  }
 }
 
 async function searchLibrary(search: BookmarkSearchQuery) {
@@ -141,6 +179,7 @@ async function searchLibrary(search: BookmarkSearchQuery) {
 
   state = response.ok
     ? {
+        folderSummaries: state.folderSummaries,
         snapshot: {bookmarks: response.data.bookmarks, folders: state.snapshot?.folders ?? [], tags: state.snapshot?.tags ?? []},
         loading: false,
         loadingMore: false,
@@ -461,7 +500,7 @@ function groupBookmarksByMonth(bookmarks: BookmarkPreview[], sortMode: SortMode)
 }
 
 function BookmarksView() {
-  const {snapshot, loading, loadingMore, error, nextOffset, activeQuery} = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
+  const {snapshot, folderSummaries, loading, loadingMore, error, nextOffset, activeQuery} = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
   const [mode, setMode] = useState<ViewMode>('bookmarks')
   const [query, setQuery] = useState('')
   const folderId = 'all'
@@ -474,6 +513,8 @@ function BookmarksView() {
   const [saving, setSaving] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
   const [bulkRemoving, setBulkRemoving] = useState(false)
+  const [folderActionMode, setFolderActionMode] = useState<FolderActionMode | null>(null)
+  const [updatingFolders, setUpdatingFolders] = useState(false)
   const [integrationEnabled, setIntegrationEnabled] = useState(true)
   const [renderLimit, setRenderLimit] = useState(INITIAL_RENDER_LIMIT)
   const [, startTransition] = useTransition()
@@ -497,6 +538,17 @@ function BookmarksView() {
   )
   const visibleIds = useMemo(() => filteredBookmarks.map((bookmark) => bookmark.tweetId), [filteredBookmarks])
   const selectedVisibleCount = visibleIds.filter((id) => selectedIds.has(id)).length
+  const selectedBookmarks = useMemo(
+    () => filteredBookmarks.filter((bookmark) => selectedIds.has(bookmark.tweetId)),
+    [filteredBookmarks, selectedIds]
+  )
+  const selectedCountByFolder = useMemo(() => {
+    const counts: Record<string, number> = {}
+    for (const bookmark of selectedBookmarks) {
+      for (const id of bookmark.folderIds) counts[id] = (counts[id] ?? 0) + 1
+    }
+    return counts
+  }, [selectedBookmarks])
 
   return (
     <section className="xbo:min-h-full xbo:bg-neutral-950 xbo:font-sans xbo:text-white" aria-label="x-bookmarks-organizer">
@@ -583,10 +635,32 @@ function BookmarksView() {
             }
             return next
           })}
-          onClear={() => setSelectedIds(new Set())}
-          onRemove={() => void removeSelectedBookmarks()}
-        />
-      )}
+           onClear={() => setSelectedIds(new Set())}
+           onRemove={() => void removeSelectedBookmarks()}
+           onAddToFolder={() => {
+             setActionError('')
+             setFolderActionMode('add')
+           }}
+           onRemoveFromFolder={() => {
+             setActionError('')
+             setFolderActionMode('remove')
+           }}
+           updatingFolders={updatingFolders}
+         />
+       )}
+
+       {folderActionMode && (
+         <FolderActionDialog
+           mode={folderActionMode}
+           folders={folderSummaries}
+           selectedCount={selectedBookmarks.length}
+           selectedCountByFolder={selectedCountByFolder}
+           busy={updatingFolders}
+           onClose={() => setFolderActionMode(null)}
+           onSubmit={handleFolderAction}
+           onCreateFolder={handleCreateFolder}
+         />
+       )}
 
       {actionMessage && <p className="xbo:m-6 xbo:text-center xbo:text-neutral-500">{actionMessage}</p>}
       {actionError && <p className="xbo:m-6 xbo:rounded-lg xbo:border xbo:border-white/10 xbo:bg-neutral-900 xbo:p-2 xbo:text-center xbo:text-white">{actionError}</p>}
@@ -702,6 +776,48 @@ function BookmarksView() {
       if (loaded) setRenderLimit((current) => current + RENDER_PAGE_SIZE)
     } catch (reason) {
       setActionError(reason instanceof Error ? reason.message : 'Could not load more bookmarks.')
+    }
+  }
+
+  async function handleCreateFolder(name: string) {
+    const folder = await folderActions.createFolder(name)
+    state = {
+      ...state,
+      folderSummaries: [...state.folderSummaries, folder].sort((left, right) => left.name.localeCompare(right.name)),
+    }
+    notify()
+    return folder
+  }
+
+  async function handleFolderAction(folderIds: string[]) {
+    if (!folderActionMode || selectedBookmarks.length === 0) return
+
+    setUpdatingFolders(true)
+    setActionError('')
+    try {
+      const bookmarkIds = selectedBookmarks.map((bookmark) => bookmark.tweetId)
+      const updated = folderActionMode === 'add'
+        ? await folderActions.addBookmarksToFolders(bookmarkIds, folderIds)
+        : await folderActions.removeBookmarksFromFolders(bookmarkIds, folderIds)
+      const updatedById = new Map(updated.map((bookmark) => [bookmark.tweetId, bookmark]))
+      if (state.snapshot) {
+        state = {
+          ...state,
+          snapshot: {
+            ...state.snapshot,
+            bookmarks: state.snapshot.bookmarks.map((bookmark) => updatedById.get(bookmark.tweetId) ?? bookmark),
+          },
+        }
+        notify()
+      }
+      await loadFolderSummaries()
+      setSelectedIds(new Set())
+      setFolderActionMode(null)
+      setActionMessage(folderActionMode === 'add' ? 'Bookmarks added to folder.' : 'Bookmarks removed from folder.')
+    } catch (reason) {
+      setActionError(reason instanceof Error ? reason.message : 'Could not update folders.')
+    } finally {
+      setUpdatingFolders(false)
     }
   }
 
