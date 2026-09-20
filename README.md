@@ -1,3 +1,5 @@
+<img src="./banner/x-bookmarks-organizer-banner.png" alt="X Bookmarks Organizer banner" width="100%">
+
 # X Bookmarks Organizer
 
 Turn the bookmarks you save on X into a library you can actually use.
