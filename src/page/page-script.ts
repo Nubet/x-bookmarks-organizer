@@ -3,8 +3,6 @@
   const RESPONSE_TYPE = 'X_BOOKMARKS_ORGANIZER_PAGE_RESPONSE'
   const BOOKMARKS_ENDPOINT =
     'https://x.com/i/api/graphql/QUjXply7fA7fk05FRyajEg/Bookmarks'
-  const CREATE_BOOKMARK_ENDPOINT =
-    'https://x.com/i/api/graphql/aoDbu3RHznuiSkQ9aNM67Q/CreateBookmark'
   const DELETE_BOOKMARK_ENDPOINT =
     'https://x.com/i/api/graphql/Wlmlj2-xzyS1GN3a6cj-mQ/DeleteBookmark'
   const BEARER_TOKEN =
@@ -116,15 +114,12 @@
     return page
   }
 
-  async function mutateBookmark(operation: 'CREATE_BOOKMARK' | 'DELETE_BOOKMARK', tweetId: string) {
+  async function deleteBookmark(tweetId: string) {
     if (!/^\d+$/.test(tweetId)) throw new Error('Invalid X tweet ID')
 
     const csrfToken = document.cookie.match(/(?:^|; )ct0=([^;]+)/)?.[1]
     if (!csrfToken) throw new Error('X CSRF token not found')
 
-    const isCreate = operation === 'CREATE_BOOKMARK'
-    const endpoint = isCreate ? CREATE_BOOKMARK_ENDPOINT : DELETE_BOOKMARK_ENDPOINT
-    const queryId = isCreate ? 'aoDbu3RHznuiSkQ9aNM67Q' : 'Wlmlj2-xzyS1GN3a6cj-mQ'
     const headers: Record<string, string> = {
       accept: '*/*',
       authorization: BEARER_TOKEN,
@@ -138,24 +133,24 @@
     const xpForwardedFor = await getXpForwardedFor()
     if (xpForwardedFor) headers['x-xp-forwarded-for'] = xpForwardedFor
 
-    const response = await originalFetch(endpoint, {
+    const response = await originalFetch(DELETE_BOOKMARK_ENDPOINT, {
       method: 'POST',
       credentials: 'include',
       headers,
       body: JSON.stringify({
         variables: {tweet_id: tweetId},
-        queryId,
+        queryId: 'Wlmlj2-xzyS1GN3a6cj-mQ',
       }),
     })
     const data = await response.json().catch(() => null)
 
     if (!response.ok) {
-      if (!isCreate && response.status === 404) return {success: true}
+      if (response.status === 404) return {success: true}
       const message = data?.errors?.[0]?.message
       throw new Error(message ? `X bookmark mutation failed: ${message}` : `X bookmark mutation failed: HTTP ${response.status}`)
     }
 
-    const result = isCreate ? data?.data?.tweet_bookmark_put : data?.data?.tweet_bookmark_delete
+    const result = data?.data?.tweet_bookmark_delete
     if (result !== 'Done') throw new Error('X returned an unexpected bookmark response')
     return {success: true}
   }
@@ -305,10 +300,8 @@
             ? {transactionId: transactionIds.at(-1)?.id ?? null}
             : operation === 'FETCH_BOOKMARKS'
               ? await fetchBookmarks(payload?.cursor ?? null)
-              : operation === 'CREATE_BOOKMARK'
-                ? await mutateBookmark(operation, payload?.tweetId)
-                : operation === 'DELETE_BOOKMARK'
-                  ? await mutateBookmark(operation, payload?.tweetId)
+              : operation === 'DELETE_BOOKMARK'
+                ? await deleteBookmark(payload?.tweetId)
               : (() => {
                   throw new Error(`Unknown page operation: ${operation}`)
                 })()

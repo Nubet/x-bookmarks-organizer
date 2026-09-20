@@ -87,7 +87,6 @@ export type RuntimeMessage =
   | {type: 'FOLDER_CREATE'; accountId: AccountId; name: string}
   | {type: 'BOOKMARKS_ADD_TO_FOLDERS'; accountId: AccountId; bookmarkIds: string[]; folderIds: string[]}
   | {type: 'BOOKMARKS_REMOVE_FROM_FOLDERS'; accountId: AccountId; bookmarkIds: string[]; folderIds: string[]}
-  | {type: 'BOOKMARK_SAVE'; accountId: AccountId; bookmark: BookmarkCapture}
   | {type: 'BOOKMARK_DELETE'; accountId: AccountId; tweetId: string}
   | {type: 'BOOKMARKS_SYNC'; accountId: AccountId; bookmarks: BookmarkCapture[]}
   | {type: 'SETTINGS_GET'}

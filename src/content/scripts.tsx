@@ -1,13 +1,11 @@
 import {sendRuntimeMessage} from '../shared/runtime'
 import type {ExtensionSettings} from '../shared/types'
-import {observeBookmarkButtons, saveCapturedBookmark} from './bookmark-observer'
 import {fetchBookmarkPage} from './page-bridge'
 import {refreshBookmarksView, resetBookmarksView, watchBookmarksRoute, watchIntegrationToggle} from './bookmarks-view'
 import {isBookmarksRoute, watchRouteChanges} from './route'
 import {readAccountId, requireAccountId} from './account-session'
 
 export default function initial() {
-  let stopObserving = () => {}
   let stopBookmarksView = () => {}
   let stopRouteChanges = () => {}
   let refreshOrganizer = refreshBookmarksView
@@ -37,7 +35,6 @@ export default function initial() {
 
   return () => {
     disposed = true
-    stopObserving()
     stopBookmarksView()
     stopRouteChanges()
     if (accountCheckTimer !== null) window.clearInterval(accountCheckTimer)
@@ -54,10 +51,6 @@ export default function initial() {
     accountId = readAccountId()
     accountCheckTimer = window.setInterval(checkAccount, 2000)
 
-    if (integrationEnabled && accountId) {
-      stopObserving = observeBookmarkButtons(saveCapturedBookmark)
-    }
-
     syncOrganizer()
   }
 
@@ -66,13 +59,7 @@ export default function initial() {
     if (nextAccountId === accountId) return
 
     accountId = nextAccountId
-    stopObserving()
-    stopObserving = () => {}
     resetBookmarksView()
-
-    if (accountId && integrationEnabled) {
-      stopObserving = observeBookmarkButtons(saveCapturedBookmark)
-    }
 
     syncOrganizer()
   }

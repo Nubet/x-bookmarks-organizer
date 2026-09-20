@@ -6,7 +6,6 @@ import {
   getSettings,
   updateSettings,
   upsertRemoteBookmarks,
-  upsertCapturedBookmark,
   deleteBookmark,
   getFolderSummaries,
   createFolder,
@@ -44,8 +43,6 @@ async function handleMessage(
         return {ok: true, data: await addBookmarksToFolders(message.accountId, message.bookmarkIds, message.folderIds)}
       case 'BOOKMARKS_REMOVE_FROM_FOLDERS':
         return {ok: true, data: await removeBookmarksFromFolders(message.accountId, message.bookmarkIds, message.folderIds)}
-      case 'BOOKMARK_SAVE':
-        return {ok: true, data: await upsertCapturedBookmark(message.accountId, message.bookmark)}
       case 'BOOKMARK_DELETE':
         return {ok: true, data: await deleteBookmark(message.accountId, message.tweetId)}
       case 'BOOKMARKS_SYNC':

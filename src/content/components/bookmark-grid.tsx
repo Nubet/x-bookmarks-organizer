@@ -59,7 +59,7 @@ function MediaPreview({media}: {media: NonNullable<BookmarkPreview['media']>[num
 }
 
 export function EmptyState() {
-  return <div className="xbo:mx-auto xbo:my-16 xbo:grid xbo:max-w-md xbo:gap-4 xbo:rounded-lg xbo:bg-neutral-900 xbo:p-12 xbo:text-center xbo:text-neutral-500"><strong className="xbo:text-xl xbo:leading-7 xbo:text-white">No bookmarks here</strong><span>Save a post on X or change your search.</span></div>
+  return <div className="xbo:mx-auto xbo:my-16 xbo:grid xbo:max-w-md xbo:gap-4 xbo:rounded-lg xbo:bg-neutral-900 xbo:p-12 xbo:text-center xbo:text-neutral-500"><strong className="xbo:text-xl xbo:leading-7 xbo:text-white">No bookmarks here</strong><span>Run a sync on X or change your search.</span></div>
 }
 
 function formatDate(value: string | number) {

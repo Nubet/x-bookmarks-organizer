@@ -1,8 +1,8 @@
 import {createRoot} from 'react-dom/client'
-import {useDeferredValue, useMemo, useState, useEffect, useRef, useSyncExternalStore, useTransition, type FormEvent} from 'react'
+import {useDeferredValue, useMemo, useState, useEffect, useRef, useSyncExternalStore, useTransition} from 'react'
 import {sendRuntimeMessage} from '../shared/runtime'
 import type {BookmarkPreview, BookmarkSearchQuery, FolderSummary, LibraryPage, LibrarySnapshot} from '../shared/types'
-import {fetchBookmarkPage, mutateBookmark} from './page-bridge'
+import {deleteBookmark} from './page-bridge'
 import {isBookmarksRoute} from './route'
 import {readAccountId, requireAccountId} from './account-session'
 import {countMedia, createSearchIndex, filterBookmarks, getSortTimestamp, sortBookmarks, type MediaType, type SortMode} from '../domain/search/search-bookmarks'
@@ -13,7 +13,6 @@ import {BulkActions} from './components/bulk-actions'
 import {FolderActionDialog, type FolderActionMode} from './components/folder-action-dialog'
 import {FolderFilter} from './components/folder-filter'
 import {MediaTypeFilter} from './components/media-type-filter'
-import {SaveForm} from './components/save-form'
 import './bookmarks-view.css'
 
 const ROOT_ID = 'bookmarks-organizer-root'
@@ -127,7 +126,7 @@ const listeners = new Set<() => void>()
 const bookmarkActions = createBookmarkActions({
   getAccountId: requireAccountId,
   deleteRemote: async (tweetId) => {
-    await mutateBookmark('DELETE_BOOKMARK', tweetId)
+    await deleteBookmark(tweetId)
   },
   deleteLocal: async (tweetId, accountId) => {
     const response = await sendRuntimeMessage({type: 'BOOKMARK_DELETE', accountId, tweetId})
@@ -560,11 +559,9 @@ function BookmarksView() {
   const [mediaType, setMediaType] = useState<MediaType>('all')
   const [sortMode, setSortMode] = useState<SortMode>('posted-desc')
   const [authorSortMode, setAuthorSortMode] = useState<AuthorSortMode>('count-desc')
-  const [addOpen, setAddOpen] = useState(false)
   const [actionMessage, setActionMessage] = useState('')
   const [actionError, setActionError] = useState('')
   const [syncing, setSyncing] = useState(false)
-  const [saving, setSaving] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
   const [bulkRemoving, setBulkRemoving] = useState(false)
   const [folderActionMode, setFolderActionMode] = useState<FolderActionMode | null>(null)
@@ -631,7 +628,6 @@ function BookmarksView() {
           >
             {syncing ? 'Syncing...' : 'Sync'}
           </button>
-          <button className="xbo:grid xbo:size-10 xbo:cursor-pointer xbo:place-items-center xbo:rounded-full xbo:border xbo:border-white/25 xbo:bg-transparent xbo:text-xl xbo:text-white xbo:hover:bg-neutral-800" type="button" onClick={() => setAddOpen((open) => !open)} aria-label="Save a post">+</button>
         </div>
       </header>
 
@@ -663,14 +659,6 @@ function BookmarksView() {
           onMediaTypeChange={(value) => startTransition(() => setMediaType(value))}
         />
       </div>
-
-      {addOpen && (
-        <SaveForm
-          saving={saving}
-          onSubmit={(event) => void saveTweet(event)}
-          onClose={() => setAddOpen(false)}
-        />
-      )}
 
       {mode === 'bookmarks' && (
         <BulkActions
@@ -836,37 +824,6 @@ function BookmarksView() {
       )}
     </section>
   )
-
-  async function saveTweet(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    const input = new FormData(event.currentTarget).get('tweetUrl')
-    const tweetId = extractTweetId(typeof input === 'string' ? input : '')
-    setActionMessage('')
-    setActionError('')
-
-    if (!tweetId) {
-      setActionError('Enter a valid X post URL.')
-      return
-    }
-
-    setSaving(true)
-    try {
-      await mutateBookmark('CREATE_BOOKMARK', tweetId)
-      const page = await fetchBookmarkPage(null)
-      const bookmark = page.bookmarks.find((item) => item.tweetId === tweetId)
-      if (!bookmark) throw new Error('Saved on X, but the post was not returned yet. Run Sync.')
-
-      const response = await sendRuntimeMessage({type: 'BOOKMARKS_SYNC', accountId: requireAccountId(), bookmarks: [bookmark]})
-      if (!response.ok) throw new Error(response.error)
-      refreshBookmarksView()
-      setAddOpen(false)
-      setActionMessage('Bookmark saved.')
-    } catch (reason) {
-      setActionError(reason instanceof Error ? reason.message : 'Could not save bookmark.')
-    } finally {
-      setSaving(false)
-    }
-  }
 
   async function toggleIntegration() {
     const enabled = !integrationEnabled
@@ -1050,8 +1007,4 @@ function AuthorGrid({authors, onViewBookmarks}: {authors: AuthorGroup[]; onViewB
 function summaryFor(mode: ViewMode, bookmarkCount: number, authorCount: number) {
   if (mode === 'authors') return `${authorCount} authors · ${bookmarkCount} bookmarks`
   return `${bookmarkCount} bookmarks`
-}
-
-function extractTweetId(value: string) {
-  return value.trim().match(/(?:x|twitter)\.com\/[^/]+\/status\/(\d+)/i)?.[1] ?? null
 }

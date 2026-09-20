@@ -136,39 +136,6 @@ export async function updateSettings(
   return settings
 }
 
-export async function upsertCapturedBookmark(
-  accountId: string,
-  capture: BookmarkCapture
-) {
-  const database = await getDatabase(accountId)
-  const now = Date.now()
-  const existing = await database.bookmarks.get(capture.tweetId)
-  const bookmark = {
-    id: capture.tweetId,
-    tweetId: capture.tweetId,
-    text: capture.text,
-    author: capture.author,
-    avatarUrl: capture.avatarUrl ?? existing?.avatarUrl,
-    postedAt: capture.postedAt ?? existing?.postedAt,
-    media: capture.media ?? existing?.media,
-    tags: existing?.tags ?? [],
-    folderIds: existing?.folderIds ?? [],
-    createdAt: existing?.createdAt ?? now,
-    updatedAt: now,
-    source: existing?.source ?? 'x',
-    needsApiUpdate: true,
-    searchTokens: createSearchTokens({text: capture.text, author: capture.author, tags: existing?.tags ?? []}),
-  } as const
-
-  await database.transaction('rw', database.bookmarks, database.tags, async () => {
-    await database.bookmarks.put(bookmark)
-
-    await database.tags.bulkPut(bookmark.tags.map((tag) => ({id: tag, name: tag})))
-  })
-
-  return bookmark
-}
-
 export async function upsertRemoteBookmarks(accountId: string, captures: BookmarkCapture[]) {
   const database = await getDatabase(accountId)
   const now = Date.now()
