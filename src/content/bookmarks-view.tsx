@@ -656,6 +656,7 @@ function BookmarksView() {
         <SaveForm
           saving={saving}
           onSubmit={(event) => void saveTweet(event)}
+          onClose={() => setAddOpen(false)}
         />
       )}
 
