@@ -2,8 +2,9 @@ import {sendRuntimeMessage} from '../shared/runtime'
 import type {ExtensionSettings} from '../shared/types'
 import {observeBookmarkButtons, saveCapturedBookmark} from './bookmark-observer'
 import {fetchBookmarkPage} from './page-bridge'
-import {refreshBookmarksView, watchBookmarksRoute, watchIntegrationToggle} from './bookmarks-view'
+import {refreshBookmarksView, resetBookmarksView, watchBookmarksRoute, watchIntegrationToggle} from './bookmarks-view'
 import {isBookmarksRoute, watchRouteChanges} from './route'
+import {readAccountId, requireAccountId} from './account-session'
 
 export default function initial() {
   let stopObserving = () => {}
@@ -11,6 +12,8 @@ export default function initial() {
   let stopRouteChanges = () => {}
   let refreshOrganizer = refreshBookmarksView
   let integrationEnabled: boolean | null = null
+  let accountId: string | null = null
+  let accountCheckTimer: number | null = null
   let viewActive = false
   let disposed = false
 
@@ -37,6 +40,7 @@ export default function initial() {
     stopObserving()
     stopBookmarksView()
     stopRouteChanges()
+    if (accountCheckTimer !== null) window.clearInterval(accountCheckTimer)
   }
 
   async function start() {
@@ -47,8 +51,26 @@ export default function initial() {
     if (disposed || !response.ok) return
 
     integrationEnabled = response.data.pageIntegration
+    accountId = readAccountId()
+    accountCheckTimer = window.setInterval(checkAccount, 2000)
 
-    if (integrationEnabled) {
+    if (integrationEnabled && accountId) {
+      stopObserving = observeBookmarkButtons(saveCapturedBookmark)
+    }
+
+    syncOrganizer()
+  }
+
+  function checkAccount() {
+    const nextAccountId = readAccountId()
+    if (nextAccountId === accountId) return
+
+    accountId = nextAccountId
+    stopObserving()
+    stopObserving = () => {}
+    resetBookmarksView()
+
+    if (accountId && integrationEnabled) {
       stopObserving = observeBookmarkButtons(saveCapturedBookmark)
     }
 
@@ -58,7 +80,7 @@ export default function initial() {
   function syncOrganizer() {
     if (integrationEnabled === null) return
 
-    if (!isBookmarksRoute()) {
+    if (!accountId || !isBookmarksRoute()) {
       if (viewActive) {
         stopBookmarksView()
         stopBookmarksView = () => {}
@@ -75,16 +97,18 @@ export default function initial() {
   }
 
   async function runSync() {
+    const syncAccountId = requireAccountId()
     const seenCursors = new Set<string>()
     let cursor: string | null = null
     let total = 0
 
     for (let page = 0; page < 50; page += 1) {
+      if (readAccountId() !== syncAccountId) throw new Error('X account changed during sync. Run sync again.')
       const result = await fetchBookmarkPage(cursor)
 
       if (result.bookmarks.length === 0) break
 
-      const response = await sendRuntimeMessage({type: 'BOOKMARKS_SYNC', bookmarks: result.bookmarks})
+      const response = await sendRuntimeMessage({type: 'BOOKMARKS_SYNC', accountId: syncAccountId, bookmarks: result.bookmarks})
       if (!response.ok) throw new Error(response.error)
       total += result.bookmarks.length
 

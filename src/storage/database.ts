@@ -6,6 +6,9 @@ import type {
 } from '../shared/types'
 import {createSearchTokens} from '../domain/search/search-bookmarks'
 
+export const SETTINGS_DATABASE_NAME = 'x-bookmarks-organizer'
+export const ACCOUNT_DATABASE_PREFIX = 'x-bookmarks-organizer-account-'
+
 export interface TagRecord {
   id: string
   name: string
@@ -17,8 +20,8 @@ export class BookmarkDatabase extends Dexie {
   tags!: Table<TagRecord, string>
   settings!: Table<ExtensionSettings, string>
 
-  constructor() {
-    super('x-bookmarks-organizer')
+  constructor(name = SETTINGS_DATABASE_NAME) {
+    super(name)
 
     this.version(1).stores({
       bookmarks: 'id,tweetId,updatedAt',
@@ -55,3 +58,12 @@ export class BookmarkDatabase extends Dexie {
 }
 
 export const database = new BookmarkDatabase()
+
+export function accountDatabaseName(accountId: string) {
+  if (!/^[A-Za-z0-9_-]+$/.test(accountId)) throw new Error('Invalid X account ID')
+  return `${ACCOUNT_DATABASE_PREFIX}${accountId}`
+}
+
+export function createAccountDatabase(accountId: string) {
+  return new BookmarkDatabase(accountDatabaseName(accountId))
+}

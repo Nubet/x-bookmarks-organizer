@@ -1,6 +1,7 @@
 import {sendRuntimeMessage} from '../shared/runtime'
 import type {BookmarkCapture} from '../shared/types'
 import {captureBookmark} from './x-dom-adapter'
+import {readAccountId} from './account-session'
 
 export function observeBookmarkButtons(
   onCapture: (bookmark: BookmarkCapture) => void
@@ -22,5 +23,7 @@ export function observeBookmarkButtons(
 }
 
 export function saveCapturedBookmark(bookmark: BookmarkCapture) {
-  void sendRuntimeMessage({type: 'BOOKMARK_SAVE', bookmark})
+  const accountId = readAccountId()
+  if (!accountId) return
+  void sendRuntimeMessage({type: 'BOOKMARK_SAVE', accountId, bookmark})
 }

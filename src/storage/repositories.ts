@@ -1,3 +1,4 @@
+import {accountDatabases} from './account-database-manager'
 import {database} from './database'
 import type {
   BookmarkSearchQuery,
@@ -15,7 +16,12 @@ const defaultSettings: ExtensionSettings = {
   autoSync: false,
 }
 
-export async function getLibrary(): Promise<LibrarySnapshot> {
+function getDatabase(accountId: string) {
+  return accountDatabases.open(accountId)
+}
+
+export async function getLibrary(accountId: string): Promise<LibrarySnapshot> {
+  const database = await getDatabase(accountId)
   const [bookmarks, folders, tagRecords] = await Promise.all([
     database.bookmarks.orderBy('createdAt').reverse().toArray(),
     database.folders.orderBy('name').toArray(),
@@ -29,7 +35,8 @@ export async function getLibrary(): Promise<LibrarySnapshot> {
   }
 }
 
-export async function getBookmarkPage(offset: number, limit: number) {
+export async function getBookmarkPage(accountId: string, offset: number, limit: number) {
+  const database = await getDatabase(accountId)
   const [bookmarks, total] = await Promise.all([
     database.bookmarks.orderBy('createdAt').reverse().offset(offset).limit(limit).toArray(),
     database.bookmarks.count(),
@@ -39,7 +46,8 @@ export async function getBookmarkPage(offset: number, limit: number) {
   return {bookmarks, nextOffset, total}
 }
 
-export async function getFolderSummaries(): Promise<FolderSummary[]> {
+export async function getFolderSummaries(accountId: string): Promise<FolderSummary[]> {
+  const database = await getDatabase(accountId)
   const folders = await database.folders.orderBy('name').toArray()
   return Promise.all(folders.map(async (folder) => ({
     ...folder,
@@ -47,7 +55,8 @@ export async function getFolderSummaries(): Promise<FolderSummary[]> {
   })))
 }
 
-export async function createFolder(name: string): Promise<FolderSummary> {
+export async function createFolder(accountId: string, name: string): Promise<FolderSummary> {
+  const database = await getDatabase(accountId)
   const normalizedName = normalizeFolderName(name)
   if (!normalizedName) throw new Error('Folder name is required.')
   if (normalizedName.length > 80) throw new Error('Folder name must be 80 characters or fewer.')
@@ -65,6 +74,7 @@ export async function createFolder(name: string): Promise<FolderSummary> {
 }
 
 async function updateBookmarkFolders(
+  database: Awaited<ReturnType<typeof getDatabase>>,
   bookmarkIds: string[],
   folderIds: string[],
   update: (currentIds: string[]) => string[]
@@ -82,15 +92,16 @@ async function updateBookmarkFolders(
   })
 }
 
-export function addBookmarksToFolders(bookmarkIds: string[], folderIds: string[]) {
-  return updateBookmarkFolders(bookmarkIds, folderIds, (currentIds) => addFolderIds(currentIds, folderIds))
+export function addBookmarksToFolders(accountId: string, bookmarkIds: string[], folderIds: string[]) {
+  return getDatabase(accountId).then((database) => updateBookmarkFolders(database, bookmarkIds, folderIds, (currentIds) => addFolderIds(currentIds, folderIds)))
 }
 
-export function removeBookmarksFromFolders(bookmarkIds: string[], folderIds: string[]) {
-  return updateBookmarkFolders(bookmarkIds, folderIds, (currentIds) => removeFolderIds(currentIds, folderIds))
+export function removeBookmarksFromFolders(accountId: string, bookmarkIds: string[], folderIds: string[]) {
+  return getDatabase(accountId).then((database) => updateBookmarkFolders(database, bookmarkIds, folderIds, (currentIds) => removeFolderIds(currentIds, folderIds)))
 }
 
-export async function searchBookmarkPage(search: BookmarkSearchQuery, offset: number, limit: number) {
+export async function searchBookmarkPage(accountId: string, search: BookmarkSearchQuery, offset: number, limit: number) {
+  const database = await getDatabase(accountId)
   const queryTokens = tokenizeSearchQuery(search.query)
   const bookmarks = queryTokens.length > 0 && shouldUseTokenIndex(search.query, queryTokens)
     ? await database.bookmarks.where('searchTokens').anyOf(queryTokens).distinct().toArray()
@@ -126,8 +137,10 @@ export async function updateSettings(
 }
 
 export async function upsertCapturedBookmark(
+  accountId: string,
   capture: BookmarkCapture
 ) {
+  const database = await getDatabase(accountId)
   const now = Date.now()
   const existing = await database.bookmarks.get(capture.tweetId)
   const bookmark = {
@@ -156,7 +169,8 @@ export async function upsertCapturedBookmark(
   return bookmark
 }
 
-export async function upsertRemoteBookmarks(captures: BookmarkCapture[]) {
+export async function upsertRemoteBookmarks(accountId: string, captures: BookmarkCapture[]) {
+  const database = await getDatabase(accountId)
   const now = Date.now()
   const bookmarks = await database.transaction(
     'rw',
@@ -206,6 +220,7 @@ export async function upsertRemoteBookmarks(captures: BookmarkCapture[]) {
   return bookmarks
 }
 
-export async function deleteBookmark(tweetId: string) {
+export async function deleteBookmark(accountId: string, tweetId: string) {
+  const database = await getDatabase(accountId)
   await database.bookmarks.delete(tweetId)
 }

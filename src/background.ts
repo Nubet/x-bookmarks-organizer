@@ -31,25 +31,25 @@ async function handleMessage(
   try {
     switch (message.type) {
       case 'LIBRARY_GET':
-        return {ok: true, data: await getLibrary()}
+        return {ok: true, data: await getLibrary(message.accountId)}
       case 'LIBRARY_GET_PAGE':
-        return {ok: true, data: await getBookmarkPage(message.offset, message.limit)}
+        return {ok: true, data: await getBookmarkPage(message.accountId, message.offset, message.limit)}
       case 'LIBRARY_SEARCH_PAGE':
-        return {ok: true, data: await searchBookmarkPage(message.search, message.offset, message.limit)}
+        return {ok: true, data: await searchBookmarkPage(message.accountId, message.search, message.offset, message.limit)}
       case 'FOLDERS_GET':
-        return {ok: true, data: await getFolderSummaries()}
+        return {ok: true, data: await getFolderSummaries(message.accountId)}
       case 'FOLDER_CREATE':
-        return {ok: true, data: await createFolder(message.name)}
+        return {ok: true, data: await createFolder(message.accountId, message.name)}
       case 'BOOKMARKS_ADD_TO_FOLDERS':
-        return {ok: true, data: await addBookmarksToFolders(message.bookmarkIds, message.folderIds)}
+        return {ok: true, data: await addBookmarksToFolders(message.accountId, message.bookmarkIds, message.folderIds)}
       case 'BOOKMARKS_REMOVE_FROM_FOLDERS':
-        return {ok: true, data: await removeBookmarksFromFolders(message.bookmarkIds, message.folderIds)}
+        return {ok: true, data: await removeBookmarksFromFolders(message.accountId, message.bookmarkIds, message.folderIds)}
       case 'BOOKMARK_SAVE':
-        return {ok: true, data: await upsertCapturedBookmark(message.bookmark)}
+        return {ok: true, data: await upsertCapturedBookmark(message.accountId, message.bookmark)}
       case 'BOOKMARK_DELETE':
-        return {ok: true, data: await deleteBookmark(message.tweetId)}
+        return {ok: true, data: await deleteBookmark(message.accountId, message.tweetId)}
       case 'BOOKMARKS_SYNC':
-        return {ok: true, data: await upsertRemoteBookmarks(message.bookmarks)}
+        return {ok: true, data: await upsertRemoteBookmarks(message.accountId, message.bookmarks)}
       case 'SETTINGS_GET':
         return {ok: true, data: await getSettings()}
       case 'SETTINGS_UPDATE':

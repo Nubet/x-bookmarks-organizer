@@ -18,6 +18,8 @@ export interface BookmarkPreview {
   media?: BookmarkMedia[]
 }
 
+export type AccountId = string
+
 export interface BookmarkMedia {
   type: 'image' | 'video'
   url: string
@@ -78,16 +80,16 @@ export interface ExtensionSettings {
 }
 
 export type RuntimeMessage =
-  | {type: 'LIBRARY_GET'}
-  | {type: 'LIBRARY_GET_PAGE'; offset: number; limit: number}
-  | {type: 'LIBRARY_SEARCH_PAGE'; offset: number; limit: number; search: BookmarkSearchQuery}
-  | {type: 'FOLDERS_GET'}
-  | {type: 'FOLDER_CREATE'; name: string}
-  | {type: 'BOOKMARKS_ADD_TO_FOLDERS'; bookmarkIds: string[]; folderIds: string[]}
-  | {type: 'BOOKMARKS_REMOVE_FROM_FOLDERS'; bookmarkIds: string[]; folderIds: string[]}
-  | {type: 'BOOKMARK_SAVE'; bookmark: BookmarkCapture}
-  | {type: 'BOOKMARK_DELETE'; tweetId: string}
-  | {type: 'BOOKMARKS_SYNC'; bookmarks: BookmarkCapture[]}
+  | {type: 'LIBRARY_GET'; accountId: AccountId}
+  | {type: 'LIBRARY_GET_PAGE'; accountId: AccountId; offset: number; limit: number}
+  | {type: 'LIBRARY_SEARCH_PAGE'; accountId: AccountId; offset: number; limit: number; search: BookmarkSearchQuery}
+  | {type: 'FOLDERS_GET'; accountId: AccountId}
+  | {type: 'FOLDER_CREATE'; accountId: AccountId; name: string}
+  | {type: 'BOOKMARKS_ADD_TO_FOLDERS'; accountId: AccountId; bookmarkIds: string[]; folderIds: string[]}
+  | {type: 'BOOKMARKS_REMOVE_FROM_FOLDERS'; accountId: AccountId; bookmarkIds: string[]; folderIds: string[]}
+  | {type: 'BOOKMARK_SAVE'; accountId: AccountId; bookmark: BookmarkCapture}
+  | {type: 'BOOKMARK_DELETE'; accountId: AccountId; tweetId: string}
+  | {type: 'BOOKMARKS_SYNC'; accountId: AccountId; bookmarks: BookmarkCapture[]}
   | {type: 'SETTINGS_GET'}
   | {type: 'SETTINGS_UPDATE'; settings: Partial<ExtensionSettings>}
   | {type: 'SYNC_START'}

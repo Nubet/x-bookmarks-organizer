@@ -4,6 +4,7 @@ import {sendRuntimeMessage} from '../shared/runtime'
 import type {BookmarkPreview, BookmarkSearchQuery, FolderSummary, LibraryPage, LibrarySnapshot} from '../shared/types'
 import {fetchBookmarkPage, mutateBookmark} from './page-bridge'
 import {isBookmarksRoute} from './route'
+import {readAccountId, requireAccountId} from './account-session'
 import {countMedia, createSearchIndex, filterBookmarks, getSortTimestamp, sortBookmarks, type MediaType, type SortMode} from '../domain/search/search-bookmarks'
 import {createBookmarkActions} from '../application/bookmarks/bookmark-actions'
 import {createFolderActions} from '../application/folders/folder-actions'
@@ -112,32 +113,33 @@ let loaded = false
 let searchRequest = 0
 const listeners = new Set<() => void>()
 const bookmarkActions = createBookmarkActions({
+  getAccountId: requireAccountId,
   deleteRemote: async (tweetId) => {
     await mutateBookmark('DELETE_BOOKMARK', tweetId)
   },
-  deleteLocal: async (tweetId) => {
-    const response = await sendRuntimeMessage({type: 'BOOKMARK_DELETE', tweetId})
+  deleteLocal: async (tweetId, accountId) => {
+    const response = await sendRuntimeMessage({type: 'BOOKMARK_DELETE', accountId, tweetId})
     if (!response.ok) throw new Error(response.error)
   },
 })
 const folderActions = createFolderActions({
   getFolders: async () => {
-    const response = await sendRuntimeMessage<FolderSummary[]>({type: 'FOLDERS_GET'})
+    const response = await sendRuntimeMessage<FolderSummary[]>({type: 'FOLDERS_GET', accountId: requireAccountId()})
     if (!response.ok) throw new Error(response.error)
     return response.data
   },
   createFolder: async (name) => {
-    const response = await sendRuntimeMessage<FolderSummary>({type: 'FOLDER_CREATE', name})
+    const response = await sendRuntimeMessage<FolderSummary>({type: 'FOLDER_CREATE', accountId: requireAccountId(), name})
     if (!response.ok) throw new Error(response.error)
     return response.data
   },
   addBookmarksToFolders: async (bookmarkIds, folderIds) => {
-    const response = await sendRuntimeMessage<BookmarkPreview[]>({type: 'BOOKMARKS_ADD_TO_FOLDERS', bookmarkIds, folderIds})
+    const response = await sendRuntimeMessage<BookmarkPreview[]>({type: 'BOOKMARKS_ADD_TO_FOLDERS', accountId: requireAccountId(), bookmarkIds, folderIds})
     if (!response.ok) throw new Error(response.error)
     return response.data
   },
   removeBookmarksFromFolders: async (bookmarkIds, folderIds) => {
-    const response = await sendRuntimeMessage<BookmarkPreview[]>({type: 'BOOKMARKS_REMOVE_FROM_FOLDERS', bookmarkIds, folderIds})
+    const response = await sendRuntimeMessage<BookmarkPreview[]>({type: 'BOOKMARKS_REMOVE_FROM_FOLDERS', accountId: requireAccountId(), bookmarkIds, folderIds})
     if (!response.ok) throw new Error(response.error)
     return response.data
   },
@@ -162,11 +164,13 @@ function getSnapshot() {
 }
 
 async function loadLibrary() {
-  searchRequest += 1
+  const requestId = ++searchRequest
+  const accountId = requireAccountId()
   state = {folderSummaries: state.folderSummaries, snapshot: null, loading: true, loadingMore: false, error: '', nextOffset: null, activeQuery: null}
   notify()
 
-  const response = await sendRuntimeMessage<LibraryPage>({type: 'LIBRARY_GET_PAGE', offset: 0, limit: LIBRARY_PAGE_SIZE})
+  const response = await sendRuntimeMessage<LibraryPage>({type: 'LIBRARY_GET_PAGE', accountId, offset: 0, limit: LIBRARY_PAGE_SIZE})
+  if (requestId !== searchRequest || readAccountId() !== accountId) return
   state = response.ok
     ? {
         folderSummaries: state.folderSummaries,
@@ -182,8 +186,10 @@ async function loadLibrary() {
 }
 
 async function loadFolderSummaries() {
+  const accountId = requireAccountId()
   try {
     const folders = await folderActions.getFolders()
+    if (readAccountId() !== accountId) return
     state = {...state, folderSummaries: folders}
     notify()
   } catch (reason) {
@@ -197,7 +203,7 @@ async function searchLibrary(search: BookmarkSearchQuery) {
   state = {...state, loading: true, loadingMore: false, error: '', nextOffset: null, activeQuery: search}
   notify()
 
-  const response = await sendRuntimeMessage<LibraryPage>({type: 'LIBRARY_SEARCH_PAGE', offset: 0, limit: LIBRARY_PAGE_SIZE, search})
+  const response = await sendRuntimeMessage<LibraryPage>({type: 'LIBRARY_SEARCH_PAGE', accountId: requireAccountId(), offset: 0, limit: LIBRARY_PAGE_SIZE, search})
   if (requestId !== searchRequest) return
 
   state = response.ok
@@ -219,12 +225,15 @@ async function loadMoreLibrary(searchOverride?: BookmarkSearchQuery) {
 
   const offset = state.nextOffset
   const search = searchOverride ?? state.activeQuery
+  const accountId = requireAccountId()
   state = {...state, loadingMore: true, error: ''}
   notify()
 
   const response = search
-    ? await sendRuntimeMessage<LibraryPage>({type: 'LIBRARY_SEARCH_PAGE', offset, limit: LIBRARY_PAGE_SIZE, search})
-    : await sendRuntimeMessage<LibraryPage>({type: 'LIBRARY_GET_PAGE', offset, limit: LIBRARY_PAGE_SIZE})
+    ? await sendRuntimeMessage<LibraryPage>({type: 'LIBRARY_SEARCH_PAGE', accountId, offset, limit: LIBRARY_PAGE_SIZE, search})
+    : await sendRuntimeMessage<LibraryPage>({type: 'LIBRARY_GET_PAGE', accountId, offset, limit: LIBRARY_PAGE_SIZE})
+
+  if (readAccountId() !== accountId) return false
 
   if (!response.ok) {
     state = {...state, loadingMore: false, error: response.error}
@@ -389,6 +398,13 @@ export function watchBookmarksRoute() {
 export function refreshBookmarksView() {
   loaded = false
   void loadLibrary()
+}
+
+export function resetBookmarksView() {
+  loaded = false
+  searchRequest += 1
+  state = {folderSummaries: [], snapshot: null, loading: false, loadingMore: false, error: '', nextOffset: null, activeQuery: null}
+  notify()
 }
 
 function removeBookmarkFromLibrary(tweetId: string) {
@@ -812,7 +828,7 @@ function BookmarksView() {
       const bookmark = page.bookmarks.find((item) => item.tweetId === tweetId)
       if (!bookmark) throw new Error('Saved on X, but the post was not returned yet. Run Sync.')
 
-      const response = await sendRuntimeMessage({type: 'BOOKMARKS_SYNC', bookmarks: [bookmark]})
+      const response = await sendRuntimeMessage({type: 'BOOKMARKS_SYNC', accountId: requireAccountId(), bookmarks: [bookmark]})
       if (!response.ok) throw new Error(response.error)
       refreshBookmarksView()
       setAddOpen(false)

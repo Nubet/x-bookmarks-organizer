@@ -1,12 +1,14 @@
 export interface BookmarkDeleteGateway {
-  deleteRemote: (tweetId: string) => Promise<void>
-  deleteLocal: (tweetId: string) => Promise<void>
+  deleteRemote: (tweetId: string, accountId: string) => Promise<void>
+  deleteLocal: (tweetId: string, accountId: string) => Promise<void>
+  getAccountId: () => string
 }
 
 export function createBookmarkActions(gateway: BookmarkDeleteGateway) {
   async function deleteBookmark(tweetId: string) {
-    await gateway.deleteRemote(tweetId)
-    await gateway.deleteLocal(tweetId)
+    const accountId = gateway.getAccountId()
+    await gateway.deleteRemote(tweetId, accountId)
+    await gateway.deleteLocal(tweetId, accountId)
   }
 
   async function deleteBookmarks(
