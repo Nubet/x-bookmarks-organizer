@@ -5,14 +5,14 @@
   "version": "1.0.0",
   "firefox:browser_specific_settings": {
     "gecko": {
-      "id": "react@extension.js",
+      "id": "x-bookmarks-organizer@norbertfila.com",
       "data_collection_permissions": {
         "required": ["none"]
       }
     }
   },
   "name": "x-bookmarks-organizer",
-  "description": "Organize X bookmarks in a searchable local library.",
+  "description": "Search, organize, and manage X bookmarks with folders, filters, sorting, and bulk actions.",
   "icons": {
     "16": "images/icon-512.png",
     "32": "images/icon-512.png",

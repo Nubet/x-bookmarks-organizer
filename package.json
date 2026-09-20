@@ -1,7 +1,8 @@
 {
   "private": true,
   "name": "x-bookmarks-organizer",
-  "description": "Organizes X bookmarks in a local React-based browser extension.",
+  "author": "Norbert Fila",
+  "description": "Search, organize, and manage X bookmarks with folders, filters, sorting, and bulk actions.",
   "version": "1.0.0",
   "license": "MIT",
   "type": "module",
