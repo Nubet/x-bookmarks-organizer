@@ -113,7 +113,7 @@ function ActionToast({message, error, onClose}: {message: string; error: string;
   if (!text) return null
 
   return (
-    <div className={`xbo:fixed xbo:right-6 xbo:top-6 xbo:z-[60] xbo:flex xbo:max-w-sm xbo:items-start xbo:gap-3 xbo:rounded-xl xbo:border xbo:px-4 xbo:py-3 xbo:shadow-2xl ${error ? 'xbo:border-red-400/40 xbo:bg-red-950 xbo:text-red-100' : 'xbo:border-emerald-400/40 xbo:bg-emerald-950 xbo:text-emerald-100'}`} role={error ? 'alert' : 'status'} aria-live={error ? 'assertive' : 'polite'}>
+    <div className={`xbo-action-toast xbo:fixed xbo:right-6 xbo:top-6 xbo:z-[60] xbo:flex xbo:max-w-sm xbo:items-start xbo:gap-3 xbo:rounded-xl xbo:border xbo:px-4 xbo:py-3 xbo:shadow-2xl ${error ? 'xbo:border-red-400/40 xbo:bg-red-950 xbo:text-red-100' : 'xbo:border-emerald-400/40 xbo:bg-emerald-950 xbo:text-emerald-100'}`} data-error={Boolean(error)} role={error ? 'alert' : 'status'} aria-live={error ? 'assertive' : 'polite'} onAnimationEnd={onClose}>
       <span className="xbo:flex-1 xbo:text-sm">{text}</span>
       <button className="xbo:cursor-pointer xbo:text-lg xbo:leading-none xbo:opacity-70 xbo:hover:opacity-100" type="button" onClick={onClose} aria-label="Dismiss notification">×</button>
     </div>
@@ -714,7 +714,8 @@ function BookmarksView() {
          />
        )}
 
-       <ActionToast
+        <ActionToast
+          key={actionError || actionMessage}
          message={actionMessage}
          error={actionError}
          onClose={() => {

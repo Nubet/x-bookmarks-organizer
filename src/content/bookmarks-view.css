@@ -23,8 +23,28 @@
   to { opacity: 1; }
 }
 
+.xbo-action-toast {
+  animation: xbo-toast-dismiss 5s ease-in forwards;
+}
+
+.xbo-action-toast[data-error="true"] {
+  animation-duration: 7s;
+}
+
+@keyframes xbo-toast-dismiss {
+  0%, 82% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-0.35rem);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   #bookmarks-organizer-root { animation: none; }
+  .xbo-action-toast { animation-duration: 1ms; }
 }
 
 #bookmarks-organizer-root [data-active="true"] {
