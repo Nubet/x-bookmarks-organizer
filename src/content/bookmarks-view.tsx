@@ -551,6 +551,7 @@ function BookmarksView() {
   const [addOpen, setAddOpen] = useState(false)
   const [actionMessage, setActionMessage] = useState('')
   const [actionError, setActionError] = useState('')
+  const [syncing, setSyncing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
   const [bulkRemoving, setBulkRemoving] = useState(false)
@@ -630,7 +631,15 @@ function BookmarksView() {
           ))}
         </nav>
 
-        <div className="xbo:ml-auto xbo:flex xbo:items-center xbo:justify-self-end">
+        <div className="xbo:ml-auto xbo:flex xbo:items-center xbo:gap-2 xbo:justify-self-end">
+          <button
+            className="xbo:cursor-pointer xbo:rounded-full xbo:border xbo:border-white/25 xbo:bg-transparent xbo:px-4 xbo:py-2 xbo:text-sm xbo:text-white xbo:transition xbo:hover:bg-neutral-800 xbo:disabled:cursor-wait xbo:disabled:opacity-60"
+            type="button"
+            disabled={syncing}
+            onClick={() => void startSync()}
+          >
+            {syncing ? 'Syncing...' : 'Sync'}
+          </button>
           <button className="xbo:grid xbo:size-10 xbo:cursor-pointer xbo:place-items-center xbo:rounded-full xbo:border xbo:border-white/25 xbo:bg-transparent xbo:text-xl xbo:text-white xbo:hover:bg-neutral-800" type="button" onClick={() => setAddOpen((open) => !open)} aria-label="Save a post">+</button>
         </div>
       </header>
@@ -855,6 +864,24 @@ function BookmarksView() {
     }
 
     window.location.reload()
+  }
+
+  async function startSync() {
+    setSyncing(true)
+    setActionMessage('')
+    setActionError('')
+
+    try {
+      const response = await sendRuntimeMessage<{status: string}>({type: 'SYNC_START'})
+      if (!response.ok) throw new Error(response.error)
+
+      refreshBookmarksView()
+      setActionMessage(response.data.status)
+    } catch (reason) {
+      setActionError(reason instanceof Error ? reason.message : 'Sync failed.')
+    } finally {
+      setSyncing(false)
+    }
   }
 
   async function handleLoadMore() {
