@@ -64,6 +64,7 @@ export type BookmarkSortMode = 'sync-desc' | 'posted-desc'
 
 export interface BookmarkSearchQuery {
   query: string
+  authorUsername?: string
   folderId: string
   tag: string
   mediaType: BookmarkMediaFilter

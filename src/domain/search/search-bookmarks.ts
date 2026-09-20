@@ -48,9 +48,11 @@ export function filterBookmarks(
   query: string,
   folderId: string,
   tag: string,
-  mediaType: MediaType
+  mediaType: MediaType,
+  authorUsername = ''
 ) {
   const normalizedQuery = normalize(query)
+  const normalizedAuthorUsername = normalize(authorUsername)
   const usernameQuery = normalizedQuery.match(/^@([a-z0-9_]+)$/)?.[1]
   const tagQuery = normalizedQuery.match(/^#([a-z0-9_]+)$/)?.[1]
 
@@ -73,6 +75,7 @@ export function filterBookmarks(
         || document.bookmark.media?.some((media) => media.type === mediaType)
 
       return matchesQuery
+        && (!normalizedAuthorUsername || document.username === normalizedAuthorUsername)
         && matchesMedia
         && (folderId === 'all' || document.bookmark.folderIds.includes(folderId))
         && (tag === 'all' || document.bookmark.tags.includes(tag))

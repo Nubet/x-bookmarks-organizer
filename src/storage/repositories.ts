@@ -96,7 +96,7 @@ export async function searchBookmarkPage(search: BookmarkSearchQuery, offset: nu
     ? await database.bookmarks.where('searchTokens').anyOf(queryTokens).distinct().toArray()
     : await database.bookmarks.toArray()
   const matches = sortBookmarks(
-    filterBookmarks(createSearchIndex(bookmarks), search.query, search.folderId, search.tag, search.mediaType),
+    filterBookmarks(createSearchIndex(bookmarks), search.query, search.folderId, search.tag, search.mediaType, search.authorUsername),
     search.sortMode
   )
   const page = matches.slice(offset, offset + limit)

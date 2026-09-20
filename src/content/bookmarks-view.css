@@ -33,6 +33,18 @@
   color: #000;
 }
 
+#bookmarks-organizer-root [data-author-filter="true"] {
+  border-color: rgba(255, 255, 255, 0.2) !important;
+  background-color: #171717 !important;
+  color: #fff !important;
+}
+
+#bookmarks-organizer-root [data-author-filter="true"]:hover {
+  border-color: rgba(255, 255, 255, 0.45) !important;
+  background-color: #262626 !important;
+  color: #fff !important;
+}
+
 #bookmarks-organizer-root [aria-checked="true"] {
   border-color: #fff;
   background-color: #fff;

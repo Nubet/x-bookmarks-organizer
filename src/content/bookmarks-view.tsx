@@ -34,7 +34,8 @@ interface LibraryState {
 }
 
 type ViewMode = 'bookmarks' | 'authors'
-function SortDropdown({ sortMode, setSortMode, startTransition }: { sortMode: SortMode, setSortMode: (mode: SortMode) => void, startTransition: React.TransitionStartFunction }) {
+type AuthorSortMode = 'count-desc' | 'count-asc'
+function SortDropdown({ sortMode, setSortMode, startTransition, mode }: { sortMode: SortMode | AuthorSortMode, setSortMode: (mode: SortMode | AuthorSortMode) => void, startTransition: React.TransitionStartFunction, mode: ViewMode }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -54,31 +55,52 @@ function SortDropdown({ sortMode, setSortMode, startTransition }: { sortMode: So
         onClick={() => setOpen(!open)}
         className="xbo:flex xbo:items-center xbo:justify-between xbo:gap-2 xbo:w-40 xbo:rounded-full xbo:border xbo:border-white/20 xbo:bg-neutral-900 xbo:px-4 xbo:py-1.5 xbo:text-sm xbo:text-white xbo:transition-colors hover:xbo:border-white/40 xbo:cursor-pointer"
       >
-        <span className="xbo:whitespace-nowrap">{sortMode === 'posted-desc' ? 'Tweet date ↓' : 'Sync date ↓'}</span>
+         <span className="xbo:whitespace-nowrap">{mode === 'authors' ? (sortMode === 'count-asc' ? 'Bookmarks ↑' : 'Bookmarks ↓') : (sortMode === 'posted-desc' ? 'Tweet date ↓' : 'Sync date ↓')}</span>
         <svg className="xbo:h-4 xbo:w-4 xbo:opacity-50 xbo:flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
         </svg>
       </button>
       {open && (
         <div className="xbo:absolute xbo:right-0 xbo:top-full xbo:z-10 xbo:mt-1 xbo:w-40 xbo:overflow-hidden xbo:rounded-xl xbo:border xbo:border-white/10 xbo:bg-neutral-900 xbo:shadow-xl">
-          <button
-            onClick={() => {
-              startTransition(() => setSortMode('posted-desc'))
-              setOpen(false)
-            }}
-            className={`xbo:block xbo:w-full xbo:px-4 xbo:py-2 xbo:text-left xbo:text-sm xbo:whitespace-nowrap xbo:transition-colors hover:xbo:bg-neutral-800 xbo:cursor-pointer ${sortMode === 'posted-desc' ? 'xbo:text-white xbo:font-medium' : 'xbo:text-neutral-400'}`}
-          >
-            Tweet date ↓
-          </button>
-          <button
-            onClick={() => {
-              startTransition(() => setSortMode('sync-desc'))
-              setOpen(false)
-            }}
-            className={`xbo:block xbo:w-full xbo:px-4 xbo:py-2 xbo:text-left xbo:text-sm xbo:whitespace-nowrap xbo:transition-colors hover:xbo:bg-neutral-800 xbo:cursor-pointer ${sortMode === 'sync-desc' ? 'xbo:text-white xbo:font-medium' : 'xbo:text-neutral-400'}`}
-          >
-            Sync date ↓
-          </button>
+          {mode === 'authors' ? <>
+            <button
+              onClick={() => {
+                startTransition(() => setSortMode('count-desc'))
+                setOpen(false)
+              }}
+              className={`xbo:block xbo:w-full xbo:px-4 xbo:py-2 xbo:text-left xbo:text-sm xbo:whitespace-nowrap xbo:transition-colors hover:xbo:bg-neutral-800 xbo:cursor-pointer ${sortMode === 'count-desc' ? 'xbo:text-white xbo:font-medium' : 'xbo:text-neutral-400'}`}
+            >
+              Bookmarks ↓
+            </button>
+            <button
+              onClick={() => {
+                startTransition(() => setSortMode('count-asc'))
+                setOpen(false)
+              }}
+              className={`xbo:block xbo:w-full xbo:px-4 xbo:py-2 xbo:text-left xbo:text-sm xbo:whitespace-nowrap xbo:transition-colors hover:xbo:bg-neutral-800 xbo:cursor-pointer ${sortMode === 'count-asc' ? 'xbo:text-white xbo:font-medium' : 'xbo:text-neutral-400'}`}
+            >
+              Bookmarks ↑
+            </button>
+          </> : <>
+            <button
+              onClick={() => {
+                startTransition(() => setSortMode('posted-desc'))
+                setOpen(false)
+              }}
+              className={`xbo:block xbo:w-full xbo:px-4 xbo:py-2 xbo:text-left xbo:text-sm xbo:whitespace-nowrap xbo:transition-colors hover:xbo:bg-neutral-800 xbo:cursor-pointer ${sortMode === 'posted-desc' ? 'xbo:text-white xbo:font-medium' : 'xbo:text-neutral-400'}`}
+            >
+              Tweet date ↓
+            </button>
+            <button
+              onClick={() => {
+                startTransition(() => setSortMode('sync-desc'))
+                setOpen(false)
+              }}
+              className={`xbo:block xbo:w-full xbo:px-4 xbo:py-2 xbo:text-left xbo:text-sm xbo:whitespace-nowrap xbo:transition-colors hover:xbo:bg-neutral-800 xbo:cursor-pointer ${sortMode === 'sync-desc' ? 'xbo:text-white xbo:font-medium' : 'xbo:text-neutral-400'}`}
+            >
+              Sync date ↓
+            </button>
+          </>}
         </div>
       )}
     </div>
@@ -504,10 +526,12 @@ function BookmarksView() {
   const {snapshot, folderSummaries, loading, loadingMore, error, nextOffset, activeQuery} = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
   const [mode, setMode] = useState<ViewMode>('bookmarks')
   const [query, setQuery] = useState('')
+  const [authorFilter, setAuthorFilter] = useState('')
   const [folderId, setFolderId] = useState('all')
   const tag = 'all'
   const [mediaType, setMediaType] = useState<MediaType>('all')
   const [sortMode, setSortMode] = useState<SortMode>('posted-desc')
+  const [authorSortMode, setAuthorSortMode] = useState<AuthorSortMode>('count-desc')
   const [addOpen, setAddOpen] = useState(false)
   const [actionMessage, setActionMessage] = useState('')
   const [actionError, setActionError] = useState('')
@@ -524,14 +548,14 @@ function BookmarksView() {
   const deferredQuery = useDeferredValue(query)
   const searchIndex = useMemo(() => createSearchIndex(bookmarks), [bookmarks])
   const searchMatches = useMemo(
-    () => filterBookmarks(searchIndex, deferredQuery, folderId, tag, 'all'),
-    [deferredQuery, folderId, searchIndex, tag]
+    () => filterBookmarks(searchIndex, deferredQuery, folderId, tag, 'all', authorFilter),
+    [authorFilter, deferredQuery, folderId, searchIndex, tag]
   )
   const filteredBookmarks = useMemo(
-    () => sortBookmarks(filterBookmarks(searchIndex, deferredQuery, folderId, tag, mediaType), sortMode),
-    [deferredQuery, folderId, mediaType, searchIndex, sortMode, tag]
+    () => sortBookmarks(filterBookmarks(searchIndex, deferredQuery, folderId, tag, mediaType, authorFilter), sortMode),
+    [authorFilter, deferredQuery, folderId, mediaType, searchIndex, sortMode, tag]
   )
-  const authorGroups = useMemo(() => groupAuthors(filteredBookmarks), [filteredBookmarks])
+  const authorGroups = useMemo(() => sortAuthors(groupAuthors(filteredBookmarks), authorSortMode), [authorSortMode, filteredBookmarks])
   const mediaCounts = useMemo(() => countMedia(searchMatches), [searchMatches])
   const monthlyBookmarks = useMemo(
     () => groupBookmarksByMonth(filteredBookmarks.slice(0, renderLimit), sortMode),
@@ -576,7 +600,14 @@ function BookmarksView() {
               className="xbo:cursor-pointer xbo:rounded-full xbo:border xbo:border-white/25 xbo:bg-transparent xbo:px-4 xbo:py-2 xbo:text-sm xbo:text-white xbo:transition xbo:hover:bg-neutral-800 xbo:data-[active=true]:border-white xbo:data-[active=true]:bg-white xbo:data-[active=true]:text-black"
               data-active={mode === item}
               type="button"
-              onClick={() => setMode(item)}
+               onClick={() => {
+                 setMode(item)
+                 if (item === 'authors') {
+                   setAuthorFilter('')
+                   setSelectedIds(new Set())
+                   void searchLibrary({query, folderId, tag, mediaType, sortMode})
+                 }
+               }}
             >
               {item[0].toUpperCase() + item.slice(1)}
             </button>
@@ -599,12 +630,12 @@ function BookmarksView() {
             onChange={(event) => {
               const value = event.target.value
               setQuery(value)
-               if (!value.trim() && activeQuery) void searchLibrary({query: '', folderId, tag, mediaType, sortMode})
+                if (!value.trim() && activeQuery) void searchLibrary({query: '', authorUsername: authorFilter, folderId, tag, mediaType, sortMode})
             }}
             onKeyDown={(event) => {
               if (event.key !== 'Enter') return
               event.preventDefault()
-              void searchLibrary({query, folderId, tag, mediaType, sortMode})
+               void searchLibrary({query, authorUsername: authorFilter, folderId, tag, mediaType, sortMode})
             }}
           />
         </label>
@@ -670,8 +701,24 @@ function BookmarksView() {
 
       {!loading && snapshot && (
         <>
-           <div className="xbo:my-6 xbo:flex xbo:flex-wrap xbo:items-center xbo:justify-between xbo:gap-4 xbo:px-6">
-             <div className="xbo:font-mono xbo:text-xs xbo:uppercase xbo:tracking-widest xbo:text-neutral-500">{summaryFor(mode, filteredBookmarks.length, authorGroups.length)}</div>
+            <div className="xbo:my-6 xbo:flex xbo:flex-wrap xbo:items-center xbo:justify-between xbo:gap-4 xbo:px-6">
+              <div className="xbo:flex xbo:flex-wrap xbo:items-center xbo:gap-2 xbo:font-mono xbo:text-xs xbo:uppercase xbo:tracking-widest xbo:text-neutral-500">
+                <span>{summaryFor(mode, filteredBookmarks.length, authorGroups.length)}</span>
+                {authorFilter && (
+                  <button
+                    className="xbo:cursor-pointer xbo:rounded-full xbo:border xbo:border-white/20 xbo:px-3 xbo:py-1 xbo:text-xs xbo:normal-case xbo:tracking-normal xbo:text-white xbo:transition-colors"
+                    data-author-filter="true"
+                    type="button"
+                    onClick={() => {
+                      setAuthorFilter('')
+                      setSelectedIds(new Set())
+                      void searchLibrary({query, authorUsername: '', folderId, tag, mediaType, sortMode})
+                    }}
+                  >
+                    Author: @{authorFilter} ×
+                  </button>
+                )}
+              </div>
              <div className="xbo:flex xbo:flex-wrap xbo:items-center xbo:gap-2">
                <FolderFilter
                  folderId={folderId}
@@ -682,10 +729,12 @@ function BookmarksView() {
                    setSelectedIds(new Set())
                    setRenderLimit(INITIAL_RENDER_LIMIT)
                    setActionMessage('')
-                   void searchLibrary({query, folderId: nextFolderId, tag, mediaType, sortMode})
+                    void searchLibrary({query, authorUsername: authorFilter, folderId: nextFolderId, tag, mediaType, sortMode})
                  }}
                />
-               {mode === 'bookmarks' && <SortDropdown sortMode={sortMode} setSortMode={setSortMode} startTransition={startTransition} />}
+                {mode === 'bookmarks'
+                  ? <SortDropdown mode="bookmarks" sortMode={sortMode} setSortMode={(next) => setSortMode(next as SortMode)} startTransition={startTransition} />
+                  : <SortDropdown mode="authors" sortMode={authorSortMode} setSortMode={(next) => setAuthorSortMode(next as AuthorSortMode)} startTransition={startTransition} />}
              </div>
            </div>
 
@@ -707,7 +756,19 @@ function BookmarksView() {
             </div>
           ))}
 
-          {mode === 'authors' && <AuthorGrid authors={authorGroups} />}
+           {mode === 'authors' && (
+             <AuthorGrid
+               authors={authorGroups}
+               onViewBookmarks={(username) => {
+                 setMode('bookmarks')
+                 setAuthorFilter(username)
+                 setQuery('')
+                 setSelectedIds(new Set())
+                 setRenderLimit(INITIAL_RENDER_LIMIT)
+                 void searchLibrary({query: '', authorUsername: username, folderId, tag, mediaType, sortMode})
+               }}
+             />
+           )}
           {mode === 'bookmarks' && (renderLimit < filteredBookmarks.length || nextOffset !== null) && (
             <div className="xbo:flex xbo:justify-center xbo:px-6 xbo:pb-16">
               <button
@@ -782,7 +843,7 @@ function BookmarksView() {
 
   async function handleLoadMore() {
     try {
-      const loaded = await loadMoreLibrary(activeQuery ? {query, folderId, tag, mediaType, sortMode} : undefined)
+       const loaded = await loadMoreLibrary(activeQuery ? {query, authorUsername: authorFilter, folderId, tag, mediaType, sortMode} : undefined)
       if (loaded) setRenderLimit((current) => current + RENDER_PAGE_SIZE)
     } catch (reason) {
       setActionError(reason instanceof Error ? reason.message : 'Could not load more bookmarks.')
@@ -895,9 +956,16 @@ function groupAuthors(bookmarks: BookmarkPreview[]) {
   return [...groups.values()].sort((left, right) => right.count - left.count)
 }
 
-function AuthorGrid({authors}: {authors: AuthorGroup[]}) {
+function sortAuthors(authors: AuthorGroup[], sortMode: AuthorSortMode) {
+  return [...authors].sort((left, right) => {
+    const countDifference = sortMode === 'count-desc' ? right.count - left.count : left.count - right.count
+    return countDifference || left.username.localeCompare(right.username)
+  })
+}
+
+function AuthorGrid({authors, onViewBookmarks}: {authors: AuthorGroup[]; onViewBookmarks: (username: string) => void}) {
   if (authors.length === 0) return <EmptyState />
-  return <div className="xbo:grid xbo:grid-cols-1 xbo:items-start xbo:gap-4 xbo:px-6 xbo:pb-16 xbo:sm:grid-cols-2 xbo:lg:grid-cols-4 xbo:xl:grid-cols-6">{authors.map((author) => <article className="xbo:flex xbo:items-center xbo:gap-3 xbo:rounded-lg xbo:border xbo:border-white/10 xbo:bg-neutral-900 xbo:p-4" key={author.username}><img className="xbo:size-8 xbo:shrink-0 xbo:rounded-full xbo:bg-neutral-800 xbo:object-cover" src={author.avatarUrl} alt="" /><div className="xbo:min-w-0"><b className="xbo:block xbo:truncate xbo:text-sm xbo:leading-5 xbo:text-white">@{author.username}</b><span className="xbo:mt-1 xbo:block xbo:truncate xbo:font-mono xbo:text-xs xbo:tracking-widest xbo:text-neutral-500">{author.count} bookmarks</span></div></article>)}</div>
+  return <div className="xbo:grid xbo:grid-cols-1 xbo:items-start xbo:gap-4 xbo:px-6 xbo:pb-16 xbo:sm:grid-cols-2 xbo:lg:grid-cols-4 xbo:xl:grid-cols-6">{authors.map((author) => <article className="xbo:rounded-lg xbo:border xbo:border-white/10 xbo:bg-neutral-900" key={author.username}><div className="xbo:flex xbo:items-center xbo:gap-3 xbo:p-4"><img className="xbo:size-8 xbo:shrink-0 xbo:rounded-full xbo:bg-neutral-800 xbo:object-cover" src={author.avatarUrl} alt="" /><div className="xbo:min-w-0"><b className="xbo:block xbo:truncate xbo:text-sm xbo:leading-5 xbo:text-white">@{author.username}</b><span className="xbo:mt-1 xbo:block xbo:truncate xbo:font-mono xbo:text-xs xbo:tracking-widest xbo:text-neutral-500">{author.count} bookmarks</span></div></div><button className="xbo:w-full xbo:cursor-pointer xbo:border-t xbo:border-white/10 xbo:bg-transparent xbo:px-4 xbo:py-3 xbo:text-left xbo:text-sm xbo:text-neutral-300 xbo:hover:bg-neutral-800 xbo:hover:text-white" type="button" onClick={() => onViewBookmarks(author.username)}>View bookmarks →</button></article>)}</div>
 }
 
 function summaryFor(mode: ViewMode, bookmarkCount: number, authorCount: number) {
