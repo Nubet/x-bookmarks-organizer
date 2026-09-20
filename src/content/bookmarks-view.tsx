@@ -108,6 +108,18 @@ function SortDropdown({ sortMode, setSortMode, startTransition, mode }: { sortMo
   )
 }
 
+function ActionToast({message, error, onClose}: {message: string; error: string; onClose: () => void}) {
+  const text = error || message
+  if (!text) return null
+
+  return (
+    <div className={`xbo:fixed xbo:right-6 xbo:top-6 xbo:z-[60] xbo:flex xbo:max-w-sm xbo:items-start xbo:gap-3 xbo:rounded-xl xbo:border xbo:px-4 xbo:py-3 xbo:shadow-2xl ${error ? 'xbo:border-red-400/40 xbo:bg-red-950 xbo:text-red-100' : 'xbo:border-emerald-400/40 xbo:bg-emerald-950 xbo:text-emerald-100'}`} role={error ? 'alert' : 'status'} aria-live={error ? 'assertive' : 'polite'}>
+      <span className="xbo:flex-1 xbo:text-sm">{text}</span>
+      <button className="xbo:cursor-pointer xbo:text-lg xbo:leading-none xbo:opacity-70 xbo:hover:opacity-100" type="button" onClick={onClose} aria-label="Dismiss notification">×</button>
+    </div>
+  )
+}
+
 let state: LibraryState = {folderSummaries: [], snapshot: null, loading: false, loadingMore: false, error: '', nextOffset: null, activeQuery: null}
 let loaded = false
 let searchRequest = 0
@@ -702,9 +714,15 @@ function BookmarksView() {
          />
        )}
 
-      {actionMessage && <p className="xbo:m-6 xbo:text-center xbo:text-neutral-500">{actionMessage}</p>}
-      {actionError && <p className="xbo:m-6 xbo:rounded-lg xbo:border xbo:border-white/10 xbo:bg-neutral-900 xbo:p-2 xbo:text-center xbo:text-white">{actionError}</p>}
-      {loading && <p className="xbo:m-6 xbo:text-center xbo:text-neutral-500">Loading bookmarks...</p>}
+       <ActionToast
+         message={actionMessage}
+         error={actionError}
+         onClose={() => {
+           setActionMessage('')
+           setActionError('')
+         }}
+       />
+       {loading && <p className="xbo:m-6 xbo:text-center xbo:text-neutral-500">Loading bookmarks...</p>}
       {error && <p className="xbo:m-6 xbo:rounded-lg xbo:border xbo:border-white/10 xbo:bg-neutral-900 xbo:p-2 xbo:text-center xbo:text-white">{error}</p>}
 
       {!loading && snapshot && (
