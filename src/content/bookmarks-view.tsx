@@ -610,27 +610,6 @@ function BookmarksView() {
           <span className="xbo:font-mono xbo:text-xs xbo:uppercase xbo:tracking-widest xbo:text-neutral-500">{bookmarks.length} saved</span>
         </div>
 
-        <nav className="xbo:flex xbo:justify-center xbo:gap-2" aria-label="Bookmark views">
-          {(['bookmarks', 'authors'] as const).map((item) => (
-            <button
-              key={item}
-              className="xbo:cursor-pointer xbo:rounded-full xbo:border xbo:border-white/25 xbo:bg-transparent xbo:px-4 xbo:py-2 xbo:text-sm xbo:text-white xbo:transition xbo:hover:bg-neutral-800 xbo:data-[active=true]:border-white xbo:data-[active=true]:bg-white xbo:data-[active=true]:text-black"
-              data-active={mode === item}
-              type="button"
-               onClick={() => {
-                 setMode(item)
-                 if (item === 'authors') {
-                   setAuthorFilter('')
-                   setSelectedIds(new Set())
-                   void searchLibrary({query, folderId, tag, mediaType, sortMode})
-                 }
-               }}
-            >
-              {item[0].toUpperCase() + item.slice(1)}
-            </button>
-          ))}
-        </nav>
-
         <div className="xbo:ml-auto xbo:flex xbo:items-center xbo:gap-2 xbo:justify-self-end">
           <button
             className="xbo:cursor-pointer xbo:rounded-full xbo:border xbo:border-white/25 xbo:bg-transparent xbo:px-4 xbo:py-2 xbo:text-sm xbo:text-white xbo:transition xbo:hover:bg-neutral-800 xbo:disabled:cursor-wait xbo:disabled:opacity-60"
@@ -645,6 +624,8 @@ function BookmarksView() {
       </header>
 
       <div className="xbo:flex xbo:flex-col xbo:items-center xbo:gap-4 xbo:border-b xbo:border-white/10 xbo:p-6">
+
+
         <label className="xbo:block xbo:w-full xbo:max-w-md">
           <span className="xbo:absolute xbo:h-px xbo:w-px xbo:overflow-hidden xbo:[clip:rect(0,0,0,0)]">Search saved posts</span>
           <input
@@ -746,6 +727,24 @@ function BookmarksView() {
                 )}
               </div>
              <div className="xbo:flex xbo:flex-wrap xbo:items-center xbo:gap-2">
+               {(['bookmarks', 'authors'] as const).map((item) => (
+                 <button
+                   key={item}
+                   className="xbo:cursor-pointer xbo:rounded-full xbo:border xbo:border-white/25 xbo:bg-transparent xbo:px-4 xbo:py-1.5 xbo:text-sm xbo:text-white xbo:transition xbo:hover:bg-neutral-800 xbo:data-[active=true]:border-white xbo:data-[active=true]:bg-neutral-800 xbo:data-[active=true]:text-white"
+                   data-active={mode === item}
+                   type="button"
+                   onClick={() => {
+                     setMode(item)
+                     if (item === 'authors') {
+                       setAuthorFilter('')
+                       setSelectedIds(new Set())
+                       void searchLibrary({query, folderId, tag, mediaType, sortMode})
+                     }
+                   }}
+                 >
+                   {item === 'bookmarks' ? 'List' : 'By author'}
+                 </button>
+               ))}
                <FolderFilter
                  folderId={folderId}
                  folders={folderSummaries}
