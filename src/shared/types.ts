@@ -81,7 +81,7 @@ export interface ExtensionSettings {
 
 export type RuntimeMessage =
   | {type: 'LIBRARY_GET'; accountId: AccountId}
-  | {type: 'LIBRARY_GET_PAGE'; accountId: AccountId; offset: number; limit: number}
+  | {type: 'LIBRARY_GET_PAGE'; accountId: AccountId; offset: number; limit: number; sortMode: BookmarkSortMode}
   | {type: 'LIBRARY_SEARCH_PAGE'; accountId: AccountId; offset: number; limit: number; search: BookmarkSearchQuery}
   | {type: 'FOLDERS_GET'; accountId: AccountId}
   | {type: 'FOLDER_CREATE'; accountId: AccountId; name: string}

@@ -32,7 +32,7 @@ async function handleMessage(
       case 'LIBRARY_GET':
         return {ok: true, data: await getLibrary(message.accountId)}
       case 'LIBRARY_GET_PAGE':
-        return {ok: true, data: await getBookmarkPage(message.accountId, message.offset, message.limit)}
+        return {ok: true, data: await getBookmarkPage(message.accountId, message.offset, message.limit, message.sortMode)}
       case 'LIBRARY_SEARCH_PAGE':
         return {ok: true, data: await searchBookmarkPage(message.accountId, message.search, message.offset, message.limit)}
       case 'FOLDERS_GET':

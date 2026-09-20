@@ -35,12 +35,11 @@ export async function getLibrary(accountId: string): Promise<LibrarySnapshot> {
   }
 }
 
-export async function getBookmarkPage(accountId: string, offset: number, limit: number) {
+export async function getBookmarkPage(accountId: string, offset: number, limit: number, sortMode: BookmarkSearchQuery['sortMode']) {
   const database = await getDatabase(accountId)
-  const [bookmarks, total] = await Promise.all([
-    database.bookmarks.orderBy('createdAt').reverse().offset(offset).limit(limit).toArray(),
-    database.bookmarks.count(),
-  ])
+  const allBookmarks = await database.bookmarks.toArray()
+  const total = allBookmarks.length
+  const bookmarks = sortBookmarks(allBookmarks, sortMode).slice(offset, offset + limit)
 
   const nextOffset = offset + bookmarks.length < total ? offset + bookmarks.length : null
   return {bookmarks, nextOffset, total}

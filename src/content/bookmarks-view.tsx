@@ -31,6 +31,7 @@ interface LibraryState {
   error: string
   nextOffset: number | null
   activeQuery: BookmarkSearchQuery | null
+  sortMode: SortMode
 }
 
 type ViewMode = 'bookmarks' | 'authors'
@@ -119,7 +120,7 @@ function ActionToast({message, error, onClose}: {message: string; error: string;
   )
 }
 
-let state: LibraryState = {folderSummaries: [], snapshot: null, loading: false, loadingMore: false, error: '', nextOffset: null, activeQuery: null}
+let state: LibraryState = {folderSummaries: [], snapshot: null, loading: false, loadingMore: false, error: '', nextOffset: null, activeQuery: null, sortMode: 'posted-desc'}
 let loaded = false
 let searchRequest = 0
 const listeners = new Set<() => void>()
@@ -174,13 +175,13 @@ function getSnapshot() {
   return state
 }
 
-async function loadLibrary() {
+async function loadLibrary(sortMode: SortMode = state.sortMode) {
   const requestId = ++searchRequest
   const accountId = requireAccountId()
-  state = {folderSummaries: state.folderSummaries, snapshot: null, loading: true, loadingMore: false, error: '', nextOffset: null, activeQuery: null}
+  state = {folderSummaries: state.folderSummaries, snapshot: null, loading: true, loadingMore: false, error: '', nextOffset: null, activeQuery: null, sortMode}
   notify()
 
-  const response = await sendRuntimeMessage<LibraryPage>({type: 'LIBRARY_GET_PAGE', accountId, offset: 0, limit: LIBRARY_PAGE_SIZE})
+  const response = await sendRuntimeMessage<LibraryPage>({type: 'LIBRARY_GET_PAGE', accountId, offset: 0, limit: LIBRARY_PAGE_SIZE, sortMode})
   if (requestId !== searchRequest || readAccountId() !== accountId) return
   state = response.ok
     ? {
@@ -191,8 +192,9 @@ async function loadLibrary() {
         error: '',
         nextOffset: response.data.nextOffset,
         activeQuery: null,
+        sortMode,
       }
-    : {folderSummaries: state.folderSummaries, snapshot: null, loading: false, loadingMore: false, error: response.error, nextOffset: null, activeQuery: null}
+    : {folderSummaries: state.folderSummaries, snapshot: null, loading: false, loadingMore: false, error: response.error, nextOffset: null, activeQuery: null, sortMode}
   notify()
 }
 
@@ -226,6 +228,7 @@ async function searchLibrary(search: BookmarkSearchQuery) {
         error: '',
         nextOffset: response.data.nextOffset,
         activeQuery: search,
+        sortMode: search.sortMode,
       }
     : {...state, loading: false, loadingMore: false, error: response.error}
   notify()
@@ -242,7 +245,7 @@ async function loadMoreLibrary(searchOverride?: BookmarkSearchQuery) {
 
   const response = search
     ? await sendRuntimeMessage<LibraryPage>({type: 'LIBRARY_SEARCH_PAGE', accountId, offset, limit: LIBRARY_PAGE_SIZE, search})
-    : await sendRuntimeMessage<LibraryPage>({type: 'LIBRARY_GET_PAGE', accountId, offset, limit: LIBRARY_PAGE_SIZE})
+    : await sendRuntimeMessage<LibraryPage>({type: 'LIBRARY_GET_PAGE', accountId, offset, limit: LIBRARY_PAGE_SIZE, sortMode: state.sortMode})
 
   if (readAccountId() !== accountId) return false
 
@@ -414,7 +417,7 @@ export function refreshBookmarksView() {
 export function resetBookmarksView() {
   loaded = false
   searchRequest += 1
-  state = {folderSummaries: [], snapshot: null, loading: false, loadingMore: false, error: '', nextOffset: null, activeQuery: null}
+  state = {folderSummaries: [], snapshot: null, loading: false, loadingMore: false, error: '', nextOffset: null, activeQuery: null, sortMode: 'posted-desc'}
   notify()
 }
 
@@ -569,6 +572,15 @@ function BookmarksView() {
   const [integrationEnabled, setIntegrationEnabled] = useState(true)
   const [renderLimit, setRenderLimit] = useState(INITIAL_RENDER_LIMIT)
   const [, startTransition] = useTransition()
+
+  const changeSortMode = (nextSortMode: SortMode) => {
+    startTransition(() => setSortMode(nextSortMode))
+    if (activeQuery) {
+      void searchLibrary({...activeQuery, sortMode: nextSortMode})
+    } else {
+      void loadLibrary(nextSortMode)
+    }
+  }
 
   const bookmarks = snapshot?.bookmarks ?? []
   const deferredQuery = useDeferredValue(query)
@@ -765,7 +777,7 @@ function BookmarksView() {
                  }}
                />
                 {mode === 'bookmarks'
-                  ? <SortDropdown mode="bookmarks" sortMode={sortMode} setSortMode={(next) => setSortMode(next as SortMode)} startTransition={startTransition} />
+                   ? <SortDropdown mode="bookmarks" sortMode={sortMode} setSortMode={(next) => changeSortMode(next as SortMode)} startTransition={startTransition} />
                   : <SortDropdown mode="authors" sortMode={authorSortMode} setSortMode={(next) => setAuthorSortMode(next as AuthorSortMode)} startTransition={startTransition} />}
              </div>
            </div>
