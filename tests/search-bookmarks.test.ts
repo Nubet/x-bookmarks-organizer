@@ -44,6 +44,16 @@ describe('bookmark search', () => {
     expect(filterBookmarks(index, '#design', 'all', 'all', 'all').map((bookmark) => bookmark.id)).toEqual(['1', '2'])
   })
 
+  it('filters bookmarks by an explicit author username', () => {
+    const bookmarks = [
+      createBookmark(),
+      createBookmark({id: '2', tweetId: '2', author: {name: 'Bob', username: 'bob'}}),
+    ]
+    const index = createSearchIndex(bookmarks)
+
+    expect(filterBookmarks(index, '', 'all', 'all', 'all', 'bob').map((bookmark) => bookmark.id)).toEqual(['2'])
+  })
+
   it('applies media, folder and tag filters together', () => {
     const bookmark = createBookmark({
       media: [{type: 'image', url: 'image.jpg'}],
