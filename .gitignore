@@ -27,9 +27,6 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# extension.js
-extension-env.d.ts
-
 # extension.js local session state
 .extension-js
 
