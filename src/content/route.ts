@@ -1,5 +1,22 @@
-export function isBookmarksRoute() {
-  return location.pathname === '/i/bookmarks' || location.pathname === '/i/history'
+const BOOKMARKS_PATH_RE = /^\/i\/(?:history(?:\/bookmarks(?:\/[^/]+)?)?|bookmarks(?:\/[^/]+)?)\/?$/
+const FOLDER_ID_RE = /^\/i\/(?:history\/bookmarks|bookmarks)\/(\d+)\/?$/
+
+export function isBookmarksRoute(urlOrPath = location.href) {
+  const pathname = toPathname(urlOrPath)
+  return pathname !== null && BOOKMARKS_PATH_RE.test(pathname)
+}
+
+export function getBookmarkFolderId(urlOrPath = location.href) {
+  const pathname = toPathname(urlOrPath)
+  return pathname?.match(FOLDER_ID_RE)?.[1] ?? null
+}
+
+function toPathname(urlOrPath: string) {
+  try {
+    return new URL(urlOrPath, 'https://x.com').pathname
+  } catch {
+    return null
+  }
 }
 
 export function watchRouteChanges(onChange: () => void) {
