@@ -316,7 +316,8 @@ export function watchIntegrationToggle() {
   let button: HTMLButtonElement | null = null
 
   const mount = () => {
-    if (button || !isBookmarksRoute()) return
+    if (button?.isConnected || document.getElementById(REENABLE_ID) || !isBookmarksRoute()) return
+    button = null
 
     const column = findPrimaryColumn()
     if (!column) return
@@ -358,7 +359,7 @@ export function watchIntegrationToggle() {
   }
 
   const observer = new MutationObserver((mutations) => {
-    if (!button && hasRouteRelevantMutation(mutations)) mount()
+    if ((!button || !button.isConnected) && hasRouteRelevantMutation(mutations)) mount()
   })
   const target = findRouteObservationTarget()
   if (target) observer.observe(target, {
@@ -482,7 +483,9 @@ function hasRouteRelevantMutation(mutations: MutationRecord[]) {
       : [...mutation.addedNodes, ...mutation.removedNodes].some((node) => {
           if (!(node instanceof Element)) return false
           return node.id === ROOT_ID
+            || node.id === REENABLE_ID
             || node.querySelector(`#${ROOT_ID}`) !== null
+            || node.querySelector(`#${REENABLE_ID}`) !== null
             || node.matches('[data-testid="primaryColumn"]')
             || node.querySelector('[data-testid="primaryColumn"]') !== null
       }))
