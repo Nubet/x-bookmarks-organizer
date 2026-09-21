@@ -1,7 +1,7 @@
 import {createRoot} from 'react-dom/client'
-import {useDeferredValue, useMemo, useState, useEffect, useRef, useSyncExternalStore, useTransition} from 'react'
+import {useMemo, useState, useEffect, useRef, useSyncExternalStore, useTransition} from 'react'
 import {sendRuntimeMessage} from '../shared/runtime'
-import type {BookmarkPreview, BookmarkSearchQuery, FolderSummary, LibraryPage, LibrarySnapshot} from '../shared/types'
+import type {BookmarkPreview, BookmarkSearchQuery, FolderSummary, LibraryPage, LibrarySnapshot, SyncMode} from '../shared/types'
 import {deleteBookmark} from './page-bridge'
 import {isBookmarksRoute} from './route'
 import {readAccountId, requireAccountId} from './account-session'
@@ -25,13 +25,16 @@ const LIBRARY_PAGE_SIZE = 100
 const monthFormatter = new Intl.DateTimeFormat('en-US', {month: 'long', year: 'numeric'})
 interface LibraryState {
   snapshot: LibrarySnapshot | null
+  total: number
   folderSummaries: FolderSummary[]
   loading: boolean
+  refreshing: boolean
   loadingMore: boolean
   error: string
   nextOffset: number | null
   activeQuery: BookmarkSearchQuery | null
   sortMode: SortMode
+  syncProgress: {mode: SyncMode; processed: number; added: number; enriched: number} | null
 }
 
 type ViewMode = 'bookmarks' | 'authors'
@@ -120,7 +123,7 @@ function ActionToast({message, error, onClose}: {message: string; error: string;
   )
 }
 
-let state: LibraryState = {folderSummaries: [], snapshot: null, loading: false, loadingMore: false, error: '', nextOffset: null, activeQuery: null, sortMode: 'posted-desc'}
+let state: LibraryState = {total: 0, folderSummaries: [], snapshot: null, loading: false, refreshing: false, loadingMore: false, error: '', nextOffset: null, activeQuery: null, sortMode: 'posted-desc', syncProgress: null}
 let loaded = false
 let searchRequest = 0
 const listeners = new Set<() => void>()
@@ -178,23 +181,27 @@ function getSnapshot() {
 async function loadLibrary(sortMode: SortMode = state.sortMode) {
   const requestId = ++searchRequest
   const accountId = requireAccountId()
-  state = {folderSummaries: state.folderSummaries, snapshot: null, loading: true, loadingMore: false, error: '', nextOffset: null, activeQuery: null, sortMode}
+  const hasSnapshot = state.snapshot !== null
+  state = {...state, loading: !hasSnapshot, refreshing: hasSnapshot, loadingMore: false, error: '', nextOffset: null, activeQuery: null, sortMode}
   notify()
 
   const response = await sendRuntimeMessage<LibraryPage>({type: 'LIBRARY_GET_PAGE', accountId, offset: 0, limit: LIBRARY_PAGE_SIZE, sortMode})
   if (requestId !== searchRequest || readAccountId() !== accountId) return
   state = response.ok
-    ? {
+      ? {
+        total: response.data.total,
         folderSummaries: state.folderSummaries,
         snapshot: {bookmarks: response.data.bookmarks, folders: [], tags: []},
         loading: false,
+        refreshing: false,
         loadingMore: false,
         error: '',
         nextOffset: response.data.nextOffset,
         activeQuery: null,
         sortMode,
+        syncProgress: state.syncProgress,
       }
-    : {folderSummaries: state.folderSummaries, snapshot: null, loading: false, loadingMore: false, error: response.error, nextOffset: null, activeQuery: null, sortMode}
+    : {...state, loading: false, refreshing: false, error: response.error, nextOffset: null, activeQuery: null, sortMode}
   notify()
 }
 
@@ -213,24 +220,32 @@ async function loadFolderSummaries() {
 
 async function searchLibrary(search: BookmarkSearchQuery) {
   const requestId = ++searchRequest
-  state = {...state, loading: true, loadingMore: false, error: '', nextOffset: null, activeQuery: search}
+  const hasSnapshot = state.snapshot !== null
+  const accountId = requireAccountId()
+  state = {...state, loading: !hasSnapshot, refreshing: hasSnapshot, loadingMore: false, error: '', nextOffset: null, activeQuery: search}
   notify()
 
-  const response = await sendRuntimeMessage<LibraryPage>({type: 'LIBRARY_SEARCH_PAGE', accountId: requireAccountId(), offset: 0, limit: LIBRARY_PAGE_SIZE, search})
-  if (requestId !== searchRequest) return
+  const [response, countResponse] = await Promise.all([
+    sendRuntimeMessage<LibraryPage>({type: 'LIBRARY_SEARCH_PAGE', accountId, offset: 0, limit: LIBRARY_PAGE_SIZE, search}),
+    sendRuntimeMessage<number>({type: 'LIBRARY_COUNT', accountId}),
+  ])
+  if (requestId !== searchRequest || readAccountId() !== accountId) return
 
   state = response.ok
     ? {
+        total: countResponse.ok ? countResponse.data : state.total,
         folderSummaries: state.folderSummaries,
         snapshot: {bookmarks: response.data.bookmarks, folders: state.snapshot?.folders ?? [], tags: state.snapshot?.tags ?? []},
         loading: false,
+        refreshing: false,
         loadingMore: false,
         error: '',
         nextOffset: response.data.nextOffset,
         activeQuery: search,
         sortMode: search.sortMode,
+        syncProgress: state.syncProgress,
       }
-    : {...state, loading: false, loadingMore: false, error: response.error}
+    : {...state, loading: false, refreshing: false, loadingMore: false, error: response.error}
   notify()
 }
 
@@ -266,6 +281,12 @@ async function loadMoreLibrary(searchOverride?: BookmarkSearchQuery) {
   }
   notify()
   return true
+}
+
+async function loadAllLibrary() {
+  while (state.nextOffset !== null) {
+    if (!await loadMoreLibrary()) break
+  }
 }
 
 export function mountBookmarksView() {
@@ -411,13 +432,22 @@ export function watchBookmarksRoute() {
 
 export function refreshBookmarksView() {
   loaded = false
-  void loadLibrary()
+  if (state.activeQuery) {
+    void searchLibrary(state.activeQuery)
+    return
+  }
+  void loadLibrary(state.sortMode)
 }
 
 export function resetBookmarksView() {
   loaded = false
   searchRequest += 1
-  state = {folderSummaries: [], snapshot: null, loading: false, loadingMore: false, error: '', nextOffset: null, activeQuery: null, sortMode: 'posted-desc'}
+  state = {total: 0, folderSummaries: [], snapshot: null, loading: false, refreshing: false, loadingMore: false, error: '', nextOffset: null, activeQuery: null, sortMode: 'posted-desc', syncProgress: null}
+  notify()
+}
+
+export function setSyncProgress(syncProgress: LibraryState['syncProgress']) {
+  state = {...state, syncProgress}
   notify()
 }
 
@@ -429,6 +459,7 @@ function removeBookmarkFromLibrary(tweetId: string) {
       ...state.snapshot,
       bookmarks: state.snapshot.bookmarks.filter((bookmark) => bookmark.tweetId !== tweetId),
     },
+    total: Math.max(0, state.total - 1),
   }
   notify()
 }
@@ -552,10 +583,33 @@ function groupBookmarksByMonth(bookmarks: BookmarkPreview[], sortMode: SortMode)
   })
 }
 
+function usePrefetchSentinel(enabled: boolean, onIntersect: () => void) {
+  const ref = useRef<HTMLDivElement | null>(null)
+  const onIntersectRef = useRef(onIntersect)
+
+  useEffect(() => {
+    onIntersectRef.current = onIntersect
+  }, [onIntersect])
+
+  useEffect(() => {
+    const node = ref.current
+    if (!enabled || !node || typeof IntersectionObserver === 'undefined') return
+
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) onIntersectRef.current()
+    }, {rootMargin: '800px 0px'})
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [enabled])
+
+  return ref
+}
+
 function BookmarksView() {
-  const {snapshot, folderSummaries, loading, loadingMore, error, nextOffset, activeQuery} = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
+  const {snapshot, folderSummaries, loading, refreshing, loadingMore, error, nextOffset, activeQuery, syncProgress} = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
   const [mode, setMode] = useState<ViewMode>('bookmarks')
   const [query, setQuery] = useState('')
+  const [submittedQuery, setSubmittedQuery] = useState('')
   const [authorFilter, setAuthorFilter] = useState('')
   const [folderId, setFolderId] = useState('all')
   const tag = 'all'
@@ -583,16 +637,30 @@ function BookmarksView() {
   }
 
   const bookmarks = snapshot?.bookmarks ?? []
-  const deferredQuery = useDeferredValue(query)
   const searchIndex = useMemo(() => createSearchIndex(bookmarks), [bookmarks])
   const searchMatches = useMemo(
-    () => filterBookmarks(searchIndex, deferredQuery, folderId, tag, 'all', authorFilter),
-    [authorFilter, deferredQuery, folderId, searchIndex, tag]
+    () => filterBookmarks(searchIndex, submittedQuery, folderId, tag, 'all', authorFilter),
+    [authorFilter, folderId, searchIndex, submittedQuery, tag]
   )
   const filteredBookmarks = useMemo(
-    () => sortBookmarks(filterBookmarks(searchIndex, deferredQuery, folderId, tag, mediaType, authorFilter), sortMode),
-    [authorFilter, deferredQuery, folderId, mediaType, searchIndex, sortMode, tag]
+    () => sortBookmarks(filterBookmarks(searchIndex, submittedQuery, folderId, tag, mediaType, authorFilter), sortMode),
+    [authorFilter, folderId, mediaType, searchIndex, sortMode, submittedQuery, tag]
   )
+  const prefetchEnabled = renderLimit < filteredBookmarks.length || nextOffset !== null
+  const prefetchRef = usePrefetchSentinel(prefetchEnabled, () => {
+    if (renderLimit < filteredBookmarks.length) {
+      setRenderLimit((current) => current + RENDER_PAGE_SIZE)
+      return
+    }
+
+    void loadMoreLibrary(activeQuery ? {query: submittedQuery, authorUsername: authorFilter, folderId, tag, mediaType, sortMode} : undefined)
+      .then((loadedPage) => {
+        if (loadedPage) setRenderLimit((current) => current + RENDER_PAGE_SIZE)
+      })
+      .catch((reason) => {
+        setActionError(reason instanceof Error ? reason.message : 'Could not load more bookmarks.')
+      })
+  })
   const authorGroups = useMemo(() => sortAuthors(groupAuthors(filteredBookmarks), authorSortMode), [authorSortMode, filteredBookmarks])
   const mediaCounts = useMemo(() => countMedia(searchMatches), [searchMatches])
   const monthlyBookmarks = useMemo(
@@ -614,7 +682,7 @@ function BookmarksView() {
   }, [selectedBookmarks])
 
   return (
-    <section className="xbo:min-h-full xbo:bg-neutral-950 xbo:font-sans xbo:text-white" aria-label="x-bookmarks-organizer">
+    <section className="xbo:min-h-full xbo:bg-neutral-950 xbo:font-sans xbo:text-white" aria-label="x-bookmarks-organizer" aria-busy={loading || refreshing}>
       <header className="xbo:sticky xbo:top-0 xbo:z-10 xbo:flex xbo:min-h-14 xbo:items-center xbo:border-b xbo:border-white/10 xbo:bg-neutral-950 xbo:px-6 xbo:py-3">
         <div className="xbo:flex xbo:flex-1 xbo:items-center xbo:gap-3">
           <h1 className="xbo:m-0 xbo:text-3xl xbo:leading-9 xbo:tracking-tight">Historia</h1>
@@ -628,7 +696,10 @@ function BookmarksView() {
           >
             <span className="xbo:block xbo:h-4 xbo:w-4 xbo:rounded-full xbo:bg-white xbo:transition xbo:aria-checked:translate-x-5 xbo:aria-checked:bg-black" />
           </button>
-          <span className="xbo:font-mono xbo:text-xs xbo:uppercase xbo:tracking-widest xbo:text-neutral-500">{bookmarks.length} saved</span>
+            <span className="xbo:font-mono xbo:text-xs xbo:uppercase xbo:tracking-widest xbo:text-neutral-500">{state.total} saved</span>
+             {refreshing && <span className="xbo:font-mono xbo:text-xs xbo:uppercase xbo:tracking-widest xbo:text-neutral-500" role="status" aria-live="polite">Updating...</span>}
+             {syncProgress && <span className="xbo:font-mono xbo:text-xs xbo:uppercase xbo:tracking-widest xbo:text-neutral-500" role="status" aria-live="polite">Syncing {syncProgress.processed}...</span>}
+             {mode === 'authors' && loadingMore && <span className="xbo:font-mono xbo:text-xs xbo:uppercase xbo:tracking-widest xbo:text-neutral-500" role="status" aria-live="polite">Loading all bookmarks...</span>}
         </div>
 
         <div className="xbo:ml-auto xbo:flex xbo:items-center xbo:gap-2 xbo:justify-self-end">
@@ -656,12 +727,16 @@ function BookmarksView() {
             onChange={(event) => {
               const value = event.target.value
               setQuery(value)
-                if (!value.trim() && activeQuery) void searchLibrary({query: '', authorUsername: authorFilter, folderId, tag, mediaType, sortMode})
+              if (!value.trim() && activeQuery) {
+                setSubmittedQuery('')
+                void searchLibrary({query: '', authorUsername: authorFilter, folderId, tag, mediaType, sortMode})
+              }
             }}
             onKeyDown={(event) => {
               if (event.key !== 'Enter') return
               event.preventDefault()
-               void searchLibrary({query, authorUsername: authorFilter, folderId, tag, mediaType, sortMode})
+              setSubmittedQuery(query)
+              void searchLibrary({query, authorUsername: authorFilter, folderId, tag, mediaType, sortMode})
             }}
           />
         </label>
@@ -672,34 +747,36 @@ function BookmarksView() {
         />
       </div>
 
-      {mode === 'bookmarks' && (
-        <BulkActions
-          selectedCount={selectedVisibleCount}
-          visibleCount={filteredBookmarks.length}
-          removing={bulkRemoving}
-          onSelectAll={() => setSelectedIds((current) => {
-            const next = new Set(current)
-            if (selectedVisibleCount === filteredBookmarks.length) {
-              for (const id of visibleIds) next.delete(id)
-            } else {
-              for (const id of visibleIds) next.add(id)
-            }
-            return next
-          })}
-          showRemoveFromFolder={folderId !== 'all'}
-          onClear={() => setSelectedIds(new Set())}
-           onRemove={() => void removeSelectedBookmarks()}
-           onAddToFolder={() => {
-             setActionError('')
-             setFolderActionMode('add')
-           }}
-           onRemoveFromFolder={() => {
-             setActionError('')
-             setFolderActionMode('remove')
-           }}
-           updatingFolders={updatingFolders}
-         />
-       )}
+      <div className="xbo:min-h-[72px]">
+        {mode === 'bookmarks' && (
+          <BulkActions
+            selectedCount={selectedVisibleCount}
+            visibleCount={filteredBookmarks.length}
+            removing={bulkRemoving}
+            onSelectAll={() => setSelectedIds((current) => {
+              const next = new Set(current)
+              if (selectedVisibleCount === filteredBookmarks.length) {
+                for (const id of visibleIds) next.delete(id)
+              } else {
+                for (const id of visibleIds) next.add(id)
+              }
+              return next
+            })}
+            showRemoveFromFolder={folderId !== 'all'}
+            onClear={() => setSelectedIds(new Set())}
+             onRemove={() => void removeSelectedBookmarks()}
+             onAddToFolder={() => {
+               setActionError('')
+               setFolderActionMode('add')
+             }}
+             onRemoveFromFolder={() => {
+               setActionError('')
+               setFolderActionMode('remove')
+             }}
+             updatingFolders={updatingFolders}
+           />
+         )}
+      </div>
 
        {folderActionMode && (
          <FolderActionDialog
@@ -723,14 +800,14 @@ function BookmarksView() {
            setActionError('')
          }}
        />
-       {loading && <p className="xbo:m-6 xbo:text-center xbo:text-neutral-500">Loading bookmarks...</p>}
+        {loading && !snapshot && <p className="xbo:m-6 xbo:text-center xbo:text-neutral-500">Loading bookmarks...</p>}
       {error && <p className="xbo:m-6 xbo:rounded-lg xbo:border xbo:border-white/10 xbo:bg-neutral-900 xbo:p-2 xbo:text-center xbo:text-white">{error}</p>}
 
-      {!loading && snapshot && (
+       {snapshot && (
         <>
             <div className="xbo:my-6 xbo:flex xbo:flex-wrap xbo:items-center xbo:justify-between xbo:gap-4 xbo:px-6">
               <div className="xbo:flex xbo:flex-wrap xbo:items-center xbo:gap-2 xbo:font-mono xbo:text-xs xbo:uppercase xbo:tracking-widest xbo:text-neutral-500">
-                <span>{summaryFor(mode, filteredBookmarks.length, authorGroups.length)}</span>
+                 <span>{mode === 'authors' && loadingMore ? 'Loading all bookmarks...' : summaryFor(mode, filteredBookmarks.length, authorGroups.length)}</span>
                 {authorFilter && (
                   <button
                     className="xbo:cursor-pointer xbo:rounded-full xbo:border xbo:border-white/20 xbo:px-3 xbo:py-1 xbo:text-xs xbo:normal-case xbo:tracking-normal xbo:text-white xbo:transition-colors"
@@ -739,7 +816,7 @@ function BookmarksView() {
                     onClick={() => {
                       setAuthorFilter('')
                       setSelectedIds(new Set())
-                      void searchLibrary({query, authorUsername: '', folderId, tag, mediaType, sortMode})
+                      void searchLibrary({query: submittedQuery, authorUsername: '', folderId, tag, mediaType, sortMode})
                     }}
                   >
                     Author: @{authorFilter} ×
@@ -753,14 +830,14 @@ function BookmarksView() {
                    className="xbo:cursor-pointer xbo:rounded-full xbo:border xbo:border-white/25 xbo:bg-transparent xbo:px-4 xbo:py-1.5 xbo:text-sm xbo:text-white xbo:transition xbo:hover:bg-neutral-800 xbo:data-[active=true]:border-white xbo:data-[active=true]:bg-neutral-800 xbo:data-[active=true]:text-white"
                    data-active={mode === item}
                    type="button"
-                   onClick={() => {
-                     setMode(item)
-                     if (item === 'authors') {
-                       setAuthorFilter('')
-                       setSelectedIds(new Set())
-                       void searchLibrary({query, folderId, tag, mediaType, sortMode})
-                     }
-                   }}
+                    onClick={() => {
+                      setMode(item)
+                       if (item === 'authors') {
+                         setAuthorFilter('')
+                         setSelectedIds(new Set())
+                         void loadAllLibrary()
+                       }
+                    }}
                  >
                    {item === 'bookmarks' ? 'List' : 'By author'}
                  </button>
@@ -768,13 +845,13 @@ function BookmarksView() {
                <FolderFilter
                  folderId={folderId}
                  folders={folderSummaries}
-                 disabled={loading || loadingMore}
+                  disabled={loadingMore}
                  onChange={(nextFolderId) => {
                    setFolderId(nextFolderId)
                    setSelectedIds(new Set())
                    setRenderLimit(INITIAL_RENDER_LIMIT)
                    setActionMessage('')
-                    void searchLibrary({query, authorUsername: authorFilter, folderId: nextFolderId, tag, mediaType, sortMode})
+                     void searchLibrary({query: submittedQuery, authorUsername: authorFilter, folderId: nextFolderId, tag, mediaType, sortMode})
                  }}
                />
                 {mode === 'bookmarks'
@@ -801,38 +878,29 @@ function BookmarksView() {
             </div>
           ))}
 
-           {mode === 'authors' && (
+            {mode === 'authors' && !loadingMore && (
              <AuthorGrid
                authors={authorGroups}
                onViewBookmarks={(username) => {
-                 setMode('bookmarks')
-                 setAuthorFilter(username)
-                 setQuery('')
-                 setSelectedIds(new Set())
+                  setMode('bookmarks')
+                  setAuthorFilter(username)
+                  setQuery('')
+                  setSubmittedQuery('')
+                  setSelectedIds(new Set())
                  setRenderLimit(INITIAL_RENDER_LIMIT)
                  void searchLibrary({query: '', authorUsername: username, folderId, tag, mediaType, sortMode})
                }}
-             />
-           )}
-          {mode === 'bookmarks' && (renderLimit < filteredBookmarks.length || nextOffset !== null) && (
-            <div className="xbo:flex xbo:justify-center xbo:px-6 xbo:pb-16">
-              <button
-                className="xbo:cursor-pointer xbo:rounded-full xbo:border xbo:border-white/25 xbo:bg-transparent xbo:px-5 xbo:py-2 xbo:text-sm xbo:text-white xbo:hover:bg-neutral-800"
-                type="button"
-                disabled={loadingMore}
-                onClick={() => {
-                  if (renderLimit < filteredBookmarks.length) {
-                    setRenderLimit((current) => current + RENDER_PAGE_SIZE)
-                    return
-                  }
-
-                  void handleLoadMore()
-                }}
-              >
-                {loadingMore ? 'Loading...' : `Load more (${nextOffset === null ? filteredBookmarks.length - renderLimit : 'more'} remaining)`}
-              </button>
-            </div>
-          )}
+               />
+             )}
+            {mode === 'bookmarks' && (renderLimit < filteredBookmarks.length || nextOffset !== null) && (
+              <div className="xbo:flex xbo:flex-col xbo:items-center xbo:gap-3 xbo:px-6 xbo:pb-16 xbo:pt-6">
+                <div ref={prefetchRef} className="xbo:h-px" aria-hidden="true" data-prefetch-sentinel="true" />
+                <div className="xbo:flex xbo:items-center xbo:gap-2 xbo:font-mono xbo:text-xs xbo:uppercase xbo:tracking-widest xbo:text-neutral-500" role="status" aria-live="polite">
+                  {loadingMore && <span className="xbo:h-3 xbo:w-3 xbo:animate-spin xbo:rounded-full xbo:border xbo:border-neutral-600 xbo:border-t-white" aria-hidden="true" />}
+                  <span>{loadingMore ? 'Loading more bookmarks...' : 'More bookmarks load as you scroll'}</span>
+                </div>
+              </div>
+            )}
         </>
       )}
     </section>
@@ -870,15 +938,6 @@ function BookmarksView() {
       setActionError(reason instanceof Error ? reason.message : 'Sync failed.')
     } finally {
       setSyncing(false)
-    }
-  }
-
-  async function handleLoadMore() {
-    try {
-       const loaded = await loadMoreLibrary(activeQuery ? {query, authorUsername: authorFilter, folderId, tag, mediaType, sortMode} : undefined)
-      if (loaded) setRenderLimit((current) => current + RENDER_PAGE_SIZE)
-    } catch (reason) {
-      setActionError(reason instanceof Error ? reason.message : 'Could not load more bookmarks.')
     }
   }
 
