@@ -54,8 +54,9 @@ const BookmarkCard = memo(function BookmarkCard({bookmark, selected, onToggle, o
 })
 
 function MediaPreview({media}: {media: NonNullable<BookmarkPreview['media']>[number]}) {
-  if (media.type === 'video') return <video className="xbo:mb-4 xbo:block xbo:max-h-[260px] xbo:w-full xbo:rounded-lg xbo:bg-neutral-950 xbo:object-cover" controls preload="none" poster={media.previewUrl}><source src={media.url} /></video>
-  return <img className="xbo:mb-4 xbo:block xbo:max-h-[260px] xbo:w-full xbo:rounded-lg xbo:bg-neutral-950 xbo:object-cover" src={media.url} alt="" loading="lazy" />
+  const mediaClassName = 'xbo:block xbo:h-full xbo:w-full xbo:object-contain'
+  if (media.type === 'video') return <div className="xbo:mb-4 xbo:aspect-video xbo:overflow-hidden xbo:rounded-lg xbo:bg-neutral-950"><video className={mediaClassName} controls preload="none" poster={media.previewUrl}><source src={media.url} /></video></div>
+  return <div className="xbo:mb-4 xbo:aspect-video xbo:overflow-hidden xbo:rounded-lg xbo:bg-neutral-950"><img className={mediaClassName} src={media.url} alt="" loading="lazy" /></div>
 }
 
 export function EmptyState() {

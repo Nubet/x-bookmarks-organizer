@@ -1,6 +1,6 @@
 import {describe, expect, it} from 'vitest'
 import type {BookmarkPreview} from '../src/shared/types'
-import {countMedia, createSearchIndex, createSearchTokens, filterBookmarks, hasLink, shouldUseTokenIndex, sortBookmarks} from '../src/domain/search/search-bookmarks'
+import {countMedia, createSearchIndex, createSearchTokens, filterBookmarks, getPostedAtTimestamp, hasLink, shouldUseTokenIndex, sortBookmarks} from '../src/domain/search/search-bookmarks'
 
 function createBookmark(overrides: Partial<BookmarkPreview> = {}): BookmarkPreview {
   return {
@@ -111,5 +111,9 @@ describe('bookmark search', () => {
 
     expect(sortBookmarks([missing, older, newer], 'posted-desc').map((bookmark) => bookmark.id)).toEqual(['2', '1', '3'])
     expect(sortBookmarks([older, newer], 'sync-desc').map((bookmark) => bookmark.id)).toEqual(['2', '1'])
+  })
+
+  it('normalizes X created_at dates for indexed sorting', () => {
+    expect(getPostedAtTimestamp('Wed Oct 10 20:19:24 +0000 2018')).toBe(Date.parse('2018-10-10T20:19:24.000Z'))
   })
 })

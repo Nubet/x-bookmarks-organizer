@@ -46,6 +46,7 @@
     "chromium:service_worker": "background.ts",
     "firefox:scripts": ["background.ts"]
   },
+  "permissions": ["alarms"],
   "content_scripts": [
     {
       "matches": ["https://x.com/*", "https://twitter.com/*"],

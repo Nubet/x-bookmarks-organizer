@@ -6,14 +6,37 @@ import type {
   ExtensionSettings,
   LibrarySnapshot,
   FolderSummary,
+  BookmarkPreview,
+  SyncMode,
+  SyncState,
 } from '../shared/types'
 import {addFolderIds, folderNameKey, normalizeFolderName, removeFolderIds} from '../domain/folders/folder-operations'
-import {createSearchIndex, createSearchTokens, filterBookmarks, shouldUseTokenIndex, sortBookmarks, tokenizeSearchQuery} from '../domain/search/search-bookmarks'
+import {createSearchIndex, createSearchTokens, filterBookmarks, getPostedAtTimestamp, shouldUseTokenIndex, sortBookmarks, tokenizeSearchQuery} from '../domain/search/search-bookmarks'
 
 const defaultSettings: ExtensionSettings = {
   key: 'default',
-  pageIntegration: true,
-  autoSync: false,
+  pageIntegration: false,
+  autoSync: true,
+}
+
+const defaultSyncState: SyncState = {
+  id: 'state',
+  mode: 'full',
+  fullSyncCompleted: false,
+  processed: 0,
+  lastSyncAt: null,
+  lastCursor: null,
+  lastError: null,
+}
+
+export function selectSyncCaptures(captures: BookmarkCapture[], existingRecords: Array<BookmarkPreview | undefined>, mode: SyncMode) {
+  return mode === 'delta'
+    ? captures.filter((_, index) => !existingRecords[index] || existingRecords[index]?.needsApiUpdate)
+    : captures
+}
+
+export function shouldStopDeltaSync(captures: BookmarkCapture[], capturesToWrite: BookmarkCapture[], mode: SyncMode) {
+  return mode === 'delta' && captures.length > 0 && capturesToWrite.length === 0
 }
 
 function getDatabase(accountId: string) {
@@ -35,11 +58,33 @@ export async function getLibrary(accountId: string): Promise<LibrarySnapshot> {
   }
 }
 
+export async function getLibraryCount(accountId: string) {
+  const database = await getDatabase(accountId)
+  return database.bookmarks.count()
+}
+
 export async function getBookmarkPage(accountId: string, offset: number, limit: number, sortMode: BookmarkSearchQuery['sortMode']) {
   const database = await getDatabase(accountId)
-  const allBookmarks = await database.bookmarks.toArray()
-  const total = allBookmarks.length
-  const bookmarks = sortBookmarks(allBookmarks, sortMode).slice(offset, offset + limit)
+  const sortIndex = sortMode === 'sync-desc' ? 'updatedAt' : 'postedAtTimestamp'
+  const sortedBookmarks = database.bookmarks.orderBy(sortIndex).reverse()
+  const [total, indexedTotal] = await Promise.all([
+    database.bookmarks.count(),
+    sortedBookmarks.count(),
+  ])
+
+  const bookmarks = offset < indexedTotal
+    ? await sortedBookmarks.offset(offset).limit(limit).toArray()
+    : []
+
+  if (sortMode === 'posted-desc' && bookmarks.length < limit && offset + bookmarks.length >= indexedTotal) {
+    const missingOffset = Math.max(0, offset - indexedTotal)
+    const missingBookmarks = await database.bookmarks
+      .filter((bookmark) => bookmark.postedAtTimestamp === undefined)
+      .offset(missingOffset)
+      .limit(limit - bookmarks.length)
+      .toArray()
+    bookmarks.push(...missingBookmarks)
+  }
 
   const nextOffset = offset + bookmarks.length < total ? offset + bookmarks.length : null
   return {bookmarks, nextOffset, total}
@@ -135,7 +180,7 @@ export async function updateSettings(
   return settings
 }
 
-export async function upsertRemoteBookmarks(accountId: string, captures: BookmarkCapture[]) {
+export async function upsertRemoteBookmarks(accountId: string, captures: BookmarkCapture[], mode: SyncMode) {
   const database = await getDatabase(accountId)
   const now = Date.now()
   const bookmarks = await database.transaction(
@@ -145,11 +190,20 @@ export async function upsertRemoteBookmarks(accountId: string, captures: Bookmar
     async () => {
       const existingRecords = await database.bookmarks.bulkGet(captures.map(c => c.tweetId))
       const result = []
+      let added = 0
+      let enriched = 0
       const tagsToPut = new Set<string>()
 
-      for (let i = 0; i < captures.length; i++) {
-        const capture = captures[i]
-        const existing = existingRecords[i]
+      const capturesToWrite = selectSyncCaptures(captures, existingRecords, mode)
+
+      if (shouldStopDeltaSync(captures, capturesToWrite, mode)) {
+        return {bookmarks: [], added: 0, enriched: 0, stop: true}
+      }
+
+      for (const capture of capturesToWrite) {
+        const existing = existingRecords[captures.indexOf(capture)]
+        if (!existing) added += 1
+        else if (existing.needsApiUpdate) enriched += 1
         const bookmark = {
           id: capture.tweetId,
           tweetId: capture.tweetId,
@@ -157,6 +211,7 @@ export async function upsertRemoteBookmarks(accountId: string, captures: Bookmar
           author: capture.author,
           avatarUrl: capture.avatarUrl ?? existing?.avatarUrl,
           postedAt: capture.postedAt ?? existing?.postedAt,
+          postedAtTimestamp: getPostedAtTimestamp(capture.postedAt ?? existing?.postedAt) ?? undefined,
           media: capture.media ?? existing?.media,
           tags: existing?.tags ?? [],
           folderIds: existing?.folderIds ?? [],
@@ -179,11 +234,49 @@ export async function upsertRemoteBookmarks(accountId: string, captures: Bookmar
         await database.tags.bulkPut(uniqueTags)
       }
 
-      return result
+      return {bookmarks: result, added, enriched, stop: false}
     }
   )
 
   return bookmarks
+}
+
+export async function getSyncState(accountId: string) {
+  const database = await getDatabase(accountId)
+  return (await database.syncState.get('state')) ?? defaultSyncState
+}
+
+export async function updateSyncState(accountId: string, changes: Partial<SyncState>) {
+  const database = await getDatabase(accountId)
+  const state = {...(await getSyncState(accountId)), ...changes, id: 'state' as const}
+  await database.syncState.put(state)
+  return state
+}
+
+export async function upsertLocalBookmark(accountId: string, capture: BookmarkCapture) {
+  const database = await getDatabase(accountId)
+  const existing = await database.bookmarks.get(capture.tweetId)
+  const now = Date.now()
+  const bookmark = {
+    id: capture.tweetId,
+    tweetId: capture.tweetId,
+    text: capture.text,
+    author: capture.author,
+    avatarUrl: capture.avatarUrl ?? existing?.avatarUrl,
+    postedAt: capture.postedAt ?? existing?.postedAt,
+    postedAtTimestamp: getPostedAtTimestamp(capture.postedAt ?? existing?.postedAt) ?? undefined,
+    media: capture.media ?? existing?.media,
+    tags: existing?.tags ?? [],
+    folderIds: existing?.folderIds ?? [],
+    createdAt: existing?.createdAt ?? now,
+    updatedAt: now,
+    source: 'manual' as const,
+    needsApiUpdate: true,
+    searchTokens: createSearchTokens({text: capture.text, author: capture.author, tags: existing?.tags ?? []}),
+  }
+
+  await database.bookmarks.put(bookmark)
+  return {bookmark, added: existing ? 0 : 1}
 }
 
 export async function deleteBookmark(accountId: string, tweetId: string) {
