@@ -1,29 +1,18 @@
 # Store metadata
 
-Starter file generated from this template's manifest. Every store asks
-for this material at submission time; keep it current as the code
-changes instead of rewriting it at the end. Replace the placeholder
-lines marked TODO before you submit.
-
-Packaging your extension is local and free. Submitting the result to a
-store is what [extension.dev](https://docs.extension.dev/publish/overview?utm_source=store-md)
-does, and it sponsors Extension.js.
-
-Last updated: 2026-09-19
+Last updated: 2026-09-21
 
 ## Listing
 
 - Name: x-bookmarks-organizer
-- Summary: Adds a sidebar panel to the browser.
-- Description: TODO write two or three short paragraphs of user
-  benefits. Describe what the user sees and gains, not how the code
-  works.
-- Category: TODO pick one per store (for example Productivity).
+- Summary: Organizes X bookmarks in a local browser library.
+- Description: Search, filter, sort, and organize X bookmarks in a fast local library. Create folders, manage multiple bookmarks at once, and sync changes from X without sending bookmark data to a separate service.
+- Category: Productivity
 - Screenshots: TODO at least one 1280x800 screenshot per store.
 
 ## Privacy and data use
 
-- This template collects, stores, and transmits no user data.
+- The current build stores extension settings and bookmark metadata locally in IndexedDB.
 - The manifest declares data_collection_permissions: none for
   Firefox, which matches this behavior. If you add data collection,
   update the declaration, this section, and your privacy policy in
@@ -35,12 +24,12 @@ Last updated: 2026-09-19
 
 ### Single purpose
 
-Adds a sidebar panel to the browser.
+Organizes X bookmarks in a local browser library.
 
 ### Permissions justification
 
-- sidePanel (Chromium only): Renders the extension's main interface in the browser side panel.
-- Content script match <all_urls>: The content script runs on the pages the user visits to render the extension's on-page interface. Narrow this to the specific sites your extension needs before submitting.
+- No extra permission is required for IndexedDB local storage.
+- Content script matches x.com and twitter.com: The content script will provide the on-page bookmark interface.
 
 ## Firefox Add-ons
 
@@ -53,7 +42,13 @@ npm install, then npm run build. The dist output matches the upload.
 
 ### Release notes
 
-TODO user-facing notes for the version you are submitting.
+Version 1.0.0 ships:
+
+- Local IndexedDB bookmark library
+- Search, filters, sorting, and pagination
+- Folders and bulk bookmark actions
+- Manual and automatic synchronization with X
+- Organizer view that replaces the default X Bookmarks page
 
 ## Edge Add-ons
 
@@ -65,5 +60,4 @@ notes in most cases.
 
 ## Version history
 
-- 1.0.0 (unreleased): initial version from the react template.
-  Not yet submitted to any store.
+- 1.0.0 (released): Initial release with local bookmark organization, search, folders, bulk actions, and X synchronization.
