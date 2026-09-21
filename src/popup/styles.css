@@ -134,3 +134,34 @@ h1 {
   padding: 8px 16px;
   border-radius: 8px;
 }
+
+.popup_footer {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  margin-top: 32px;
+  color: var(--xbo-muted-foreground);
+}
+
+.popup_links {
+  display: flex;
+  gap: 12px;
+  font-size: 12px;
+}
+
+.popup_links a {
+  color: var(--xbo-foreground);
+  text-decoration: none;
+}
+
+.popup_links a:hover {
+  text-decoration: underline;
+}
+
+.popup_version {
+  color: var(--xbo-muted-foreground);
+  font-family: var(--xbo-font-mono);
+  font-size: 10px;
+  letter-spacing: 0.2px;
+  opacity: 0.7;
+}

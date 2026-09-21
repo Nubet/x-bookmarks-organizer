@@ -2,6 +2,8 @@ import {useSyncExternalStore} from 'react'
 import {sendRuntimeMessage} from '../shared/runtime'
 import type {ExtensionSettings} from '../shared/types'
 
+const extensionVersion = chrome.runtime.getManifest().version
+
 interface SettingsView {
   settings: ExtensionSettings | null
   loading: boolean
@@ -107,8 +109,8 @@ export default function PopupApp() {
           </button>
           <label className="setting_row">
             <span>
-              <strong>Page integration</strong>
-              <small>Replace the default bookmark view on X.</small>
+              <strong>Organizer view</strong>
+              <small>Use the organizer instead of X's default Bookmarks page.</small>
             </span>
             <input
               type="checkbox"
@@ -133,6 +135,29 @@ export default function PopupApp() {
           </label>
         </section>
       )}
+
+      <footer className="popup_footer">
+        <nav className="popup_links" aria-label="Project links">
+          <a
+            href="https://github.com/Nubet/x-bookmarks-organizer"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Source code
+          </a>
+          <span>
+            Made by:{' '}
+            <a
+              href="https://www.linkedin.com/in/norbert-fila/"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Norbert Fila
+            </a>
+          </span>
+        </nav>
+        <span className="popup_version">Version {extensionVersion}</span>
+      </footer>
     </main>
   )
 }
