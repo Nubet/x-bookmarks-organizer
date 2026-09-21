@@ -1,3 +1,5 @@
+import {retryAsync} from '../shared/retry'
+
 const REQUEST_TYPE = 'X_BOOKMARKS_ORGANIZER_PAGE_REQUEST'
 const RESPONSE_TYPE = 'X_BOOKMARKS_ORGANIZER_PAGE_RESPONSE'
 const PAGE_SCRIPT_PATH = 'page/page-script.js'
@@ -51,7 +53,17 @@ export function deleteBookmark(tweetId: string) {
 }
 
 async function requestPageOperation<T>(operation: string, payload?: unknown) {
-  await installPageScript()
+  const retryable = operation === 'FETCH_BOOKMARKS' || operation === 'GET_TRANSACTION_ID'
+  return retryAsync(
+    async () => {
+      await installPageScript()
+      return requestPageOperationOnce<T>(operation, payload)
+    },
+    {retries: retryable ? 2 : 0, shouldRetry: isTransientPageError}
+  )
+}
+
+async function requestPageOperationOnce<T>(operation: string, payload?: unknown) {
 
   const requestId = `request-${Date.now()}-${requestCounter++}`
 
@@ -81,4 +93,9 @@ async function requestPageOperation<T>(operation: string, payload?: unknown) {
       window.location.origin
     )
   })
+}
+
+function isTransientPageError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error)
+  return /timed out|network|HTTP (429|5\d\d)/i.test(message)
 }

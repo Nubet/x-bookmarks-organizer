@@ -107,7 +107,13 @@ export function hasLink(bookmark: BookmarkPreview) {
 
 export function getSortTimestamp(bookmark: BookmarkPreview, sortMode: SortMode) {
   if (sortMode === 'sync-desc') return bookmark.updatedAt || null
-  return Date.parse(bookmark.postedAt ?? '') || null
+  return getPostedAtTimestamp(bookmark.postedAt, bookmark.postedAtTimestamp)
+}
+
+export function getPostedAtTimestamp(postedAt?: string, postedAtTimestamp?: number) {
+  if (postedAtTimestamp !== undefined) return postedAtTimestamp
+  const timestamp = Date.parse(postedAt ?? '')
+  return Number.isFinite(timestamp) ? timestamp : null
 }
 
 function normalize(value: string) {
