@@ -182,18 +182,18 @@ async function runSync(tabId?: number, expectedAccountId?: string) {
     // Let the content-script handshake identify the X tab. Reading tab.url can be
     // restricted after a clean install when the manifest has no tabs permission.
     const tabs = tabId
-      ? await chrome.tabs.query({})
-      : await chrome.tabs.query({active: true, lastFocusedWindow: true})
+      ? await queryTabs({})
+      : await queryTabs({active: true, lastFocusedWindow: true})
     const tab = tabs.find((candidate) => candidate.id === tabId)
       ?? tabs.find((candidate) => candidate.id !== undefined && /^https:\/\/(www\.)?(x|twitter)\.com\//i.test(candidate.url ?? ''))
     if (!tab?.id) throw new Error('Open or reload an X tab before starting sync')
 
     let response: RuntimeResponse<unknown>
     try {
-      response = await chrome.tabs.sendMessage(
+      response = await sendTabMessage<RuntimeResponse<unknown>>(
         tab.id,
         {type: 'SYNC_RUN', accountId: expectedAccountId} satisfies RuntimeMessage
-      ) as RuntimeResponse<unknown>
+      )
     } catch (error) {
       if (/Receiving end does not exist|Could not establish connection/i.test(error instanceof Error ? error.message : String(error))) {
         throw new Error('Reload the X tab before starting sync')
@@ -206,6 +206,32 @@ async function runSync(tabId?: number, expectedAccountId?: string) {
     retries: 2,
     baseDelayMs: 500,
     shouldRetry: (error) => /Receiving end does not exist|Could not establish connection|Open or reload/i.test(error instanceof Error ? error.message : String(error)),
+  })
+}
+
+function queryTabs(queryInfo: chrome.tabs.QueryInfo) {
+  return new Promise<chrome.tabs.Tab[]>((resolve, reject) => {
+    chrome.tabs.query(queryInfo, (tabs) => {
+      const error = chrome.runtime.lastError
+      if (error) {
+        reject(new Error(error.message ?? 'Could not query browser tabs'))
+        return
+      }
+      resolve(tabs ?? [])
+    })
+  })
+}
+
+function sendTabMessage<T>(tabId: number, message: RuntimeMessage) {
+  return new Promise<T>((resolve, reject) => {
+    chrome.tabs.sendMessage(tabId, message, (response) => {
+      const error = chrome.runtime.lastError
+      if (error) {
+        reject(new Error(error.message ?? 'Could not message the X tab'))
+        return
+      }
+      resolve(response as T)
+    })
   })
 }
 
