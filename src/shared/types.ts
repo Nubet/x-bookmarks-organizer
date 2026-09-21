@@ -124,8 +124,10 @@ export type RuntimeMessage =
   | {type: 'SYNC_FINISHED'; accountId: AccountId; mode: SyncMode; processed: number}
   | {type: 'SETTINGS_GET'}
   | {type: 'SETTINGS_UPDATE'; settings: Partial<ExtensionSettings>}
+  | {type: 'SETTINGS_CHANGED'; settings: ExtensionSettings}
   | {type: 'SYNC_START'}
-  | {type: 'SYNC_RUN'}
+  | {type: 'AUTO_SYNC_REQUEST'; accountId: AccountId}
+  | {type: 'SYNC_RUN'; accountId?: AccountId}
 
 export type RuntimeResponse<T> =
   | {ok: true; data: T}

@@ -17,20 +17,22 @@ import {
   addBookmarksToFolders,
   removeBookmarksFromFolders,
 } from './storage/repositories'
+import {isQuickSyncThrottled} from './shared/sync-throttle'
 
 chrome.runtime.onMessage.addListener(
   (
     message: RuntimeMessage,
-    _sender,
+    sender,
     sendResponse: (response: RuntimeResponse<unknown>) => void
   ) => {
-    void handleMessage(message).then(sendResponse)
+    void handleMessage(message, sender).then(sendResponse)
     return true
   }
 )
 
 async function handleMessage(
-  message: RuntimeMessage
+  message: RuntimeMessage,
+  sender?: chrome.runtime.MessageSender
 ): Promise<RuntimeResponse<unknown>> {
   try {
     switch (message.type) {
@@ -91,7 +93,7 @@ async function handleMessage(
         const updated = await updateSyncState(message.accountId, {
           mode: message.mode,
           fullSyncCompleted: message.mode === 'full' && message.completed ? true : state.fullSyncCompleted,
-          lastSyncAt: message.completed ? Date.now() : state.lastSyncAt,
+          lastSyncAt: Date.now(),
           lastCursor: null,
           lastError: null,
         })
@@ -109,9 +111,26 @@ async function handleMessage(
       case 'SETTINGS_GET':
         return {ok: true, data: await getSettings()}
       case 'SETTINGS_UPDATE':
-        return {ok: true, data: await updateSettings(message.settings)}
+        {
+          const settings = await updateSettings(message.settings)
+          if (settings.autoSync) void ensureAutoSyncAlarm()
+          else void chrome.alarms.clear(AUTO_SYNC_ALARM_NAME)
+          broadcastSettingsChanged(settings)
+          return {ok: true, data: settings}
+        }
+      case 'SETTINGS_CHANGED':
+        return {ok: true, data: null}
       case 'SYNC_START':
         return {ok: true, data: await startSync()}
+      case 'AUTO_SYNC_REQUEST': {
+        const settings = await getSettings()
+        if (!settings.autoSync) return {ok: true, data: {skipped: true, reason: 'disabled'}}
+        const state = await getSyncState(message.accountId)
+        if (isQuickSyncThrottled(state.lastSyncAt)) {
+          return {ok: true, data: {skipped: true, reason: 'too_soon'}}
+        }
+        return {ok: true, data: await startSync(sender?.tab?.id, message.accountId)}
+      }
       case 'SYNC_RUN':
         return {ok: false, error: 'SYNC_RUN is only valid in a content script'}
     }
@@ -124,29 +143,56 @@ async function handleMessage(
 }
 
 let syncFlight: Promise<unknown> | null = null
+const AUTO_SYNC_ALARM_NAME = 'x-bookmarks-organizer-auto-sync'
+const AUTO_SYNC_PERIOD_MINUTES = 15
 
-async function startSync() {
+async function ensureAutoSyncAlarm() {
+  const settings = await getSettings()
+  if (!settings.autoSync) return
+  const existing = await chrome.alarms.get(AUTO_SYNC_ALARM_NAME)
+  if (!existing) {
+    await chrome.alarms.create(AUTO_SYNC_ALARM_NAME, {
+      delayInMinutes: AUTO_SYNC_PERIOD_MINUTES,
+      periodInMinutes: AUTO_SYNC_PERIOD_MINUTES,
+    })
+  }
+}
+
+void ensureAutoSyncAlarm()
+
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name !== AUTO_SYNC_ALARM_NAME) return
+  void getSettings().then((settings) => {
+    if (!settings.autoSync) return
+    return startSync().catch(() => undefined)
+  })
+})
+
+async function startSync(tabId?: number, expectedAccountId?: string) {
   if (syncFlight) return syncFlight
 
-  syncFlight = runSync().finally(() => {
+  syncFlight = runSync(tabId, expectedAccountId).finally(() => {
     syncFlight = null
   })
   return syncFlight
 }
 
-async function runSync() {
+async function runSync(tabId?: number, expectedAccountId?: string) {
   return retryAsync(async () => {
     // Let the content-script handshake identify the X tab. Reading tab.url can be
     // restricted after a clean install when the manifest has no tabs permission.
-    const tabs = await chrome.tabs.query({active: true, lastFocusedWindow: true})
-    const tab = tabs.find((candidate) => candidate.id !== undefined)
+    const tabs = tabId
+      ? await chrome.tabs.query({})
+      : await chrome.tabs.query({active: true, lastFocusedWindow: true})
+    const tab = tabs.find((candidate) => candidate.id === tabId)
+      ?? tabs.find((candidate) => candidate.id !== undefined && /^https:\/\/(www\.)?(x|twitter)\.com\//i.test(candidate.url ?? ''))
     if (!tab?.id) throw new Error('Open or reload an X tab before starting sync')
 
     let response: RuntimeResponse<unknown>
     try {
       response = await chrome.tabs.sendMessage(
         tab.id,
-        {type: 'SYNC_RUN'} satisfies RuntimeMessage
+        {type: 'SYNC_RUN', accountId: expectedAccountId} satisfies RuntimeMessage
       ) as RuntimeResponse<unknown>
     } catch (error) {
       if (/Receiving end does not exist|Could not establish connection/i.test(error instanceof Error ? error.message : String(error))) {
@@ -177,6 +223,12 @@ function broadcastSyncProgress(accountId: string, mode: 'full' | 'delta', proces
 
 function broadcastSyncFinished(accountId: string, mode: 'full' | 'delta', processed: number) {
   chrome.runtime.sendMessage({type: 'SYNC_FINISHED', accountId, mode, processed}, () => {
+    void chrome.runtime.lastError
+  })
+}
+
+function broadcastSettingsChanged(settings: Awaited<ReturnType<typeof getSettings>>) {
+  chrome.runtime.sendMessage({type: 'SETTINGS_CHANGED', settings}, () => {
     void chrome.runtime.lastError
   })
 }

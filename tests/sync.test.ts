@@ -1,6 +1,7 @@
 import {describe, expect, it} from 'vitest'
 import type {BookmarkCapture, BookmarkPreview} from '../src/shared/types'
 import {selectSyncCaptures, shouldStopDeltaSync} from '../src/storage/repositories'
+import {isQuickSyncThrottled} from '../src/shared/sync-throttle'
 
 const capture = (tweetId: string): BookmarkCapture => ({
   tweetId,
@@ -30,5 +31,14 @@ describe('bookmark sync decisions', () => {
 
     expect(selectSyncCaptures(page, existing, 'delta')).toEqual(page)
     expect(shouldStopDeltaSync(page, page, 'delta')).toBe(false)
+  })
+
+  it('throttles quick syncs for five seconds after a completed sync', () => {
+    expect(isQuickSyncThrottled(10_000, 14_999)).toBe(true)
+    expect(isQuickSyncThrottled(10_000, 15_000)).toBe(false)
+  })
+
+  it('allows the first quick sync when no sync has completed yet', () => {
+    expect(isQuickSyncThrottled(null, 10_000)).toBe(false)
   })
 })

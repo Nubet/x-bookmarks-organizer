@@ -124,6 +124,9 @@ function ActionToast({message, error, onClose}: {message: string; error: string;
 }
 
 let state: LibraryState = {total: 0, folderSummaries: [], snapshot: null, loading: false, refreshing: false, loadingMore: false, error: '', nextOffset: null, activeQuery: null, sortMode: 'posted-desc', syncProgress: null}
+let integrationStatusElement: HTMLElement | null = null
+let autoSyncEnabled = true
+let syncError = ''
 let loaded = false
 let searchRequest = 0
 const listeners = new Set<() => void>()
@@ -289,7 +292,7 @@ async function loadAllLibrary() {
   }
 }
 
-export function mountBookmarksView() {
+export function mountBookmarksView(onDisable?: () => void) {
   if (!isBookmarksRoute()) return () => undefined
 
   const column = findPrimaryColumn()
@@ -302,7 +305,7 @@ export function mountBookmarksView() {
   applyWideLayout(column)
 
   const root = createRoot(rootElement)
-  root.render(<BookmarksView />)
+  root.render(<BookmarksView onDisable={onDisable} />)
 
   return (preserveLayout = false) => {
     root.unmount()
@@ -312,7 +315,7 @@ export function mountBookmarksView() {
   }
 }
 
-export function watchIntegrationToggle() {
+export function watchIntegrationToggle(onEnable?: () => void) {
   let button: HTMLButtonElement | null = null
 
   const mount = () => {
@@ -332,12 +335,15 @@ export function watchIntegrationToggle() {
     const iconUrl = typeof chrome !== 'undefined' && chrome.runtime ? chrome.runtime.getURL('images/icon-512.png') : ''
     const iconHtml = iconUrl ? `<img src="${iconUrl}" class="xbo:h-6 xbo:w-6 xbo:rounded-md xbo:object-cover" alt="Icon" />` : '<span class="xbo:text-base">🔖</span>'
     
-    label.innerHTML = `${iconHtml} <div class="xbo:flex xbo:items-baseline xbo:gap-2"><span class="xbo:font-medium xbo:text-white xbo:text-base">X Bookmarks Organizer</span> <span class="xbo:text-neutral-500 xbo:text-sm">is disabled</span></div>`
+    label.innerHTML = `${iconHtml} <span class="xbo:font-medium xbo:text-white xbo:text-base">X Bookmarks Organizer</span>`
     wrapper.append(label)
 
     button = document.createElement('button')
     button.type = 'button'
-    button.textContent = 'Enable'
+    button.textContent = 'Open organizer'
+    button.setAttribute('role', 'switch')
+    button.setAttribute('aria-checked', 'false')
+    button.setAttribute('aria-label', 'Open organizer')
     button.className = 'xbo:cursor-pointer xbo:rounded-full xbo:border xbo:border-white xbo:bg-white xbo:px-4 xbo:py-2 xbo:text-sm xbo:font-medium xbo:text-black xbo:transition xbo:hover:opacity-90 xbo:disabled:opacity-60 xbo:disabled:cursor-wait'
     button.style.color = '#000'
     button.addEventListener('click', async () => {
@@ -346,16 +352,13 @@ export function watchIntegrationToggle() {
         type: 'SETTINGS_UPDATE',
         settings: {pageIntegration: true},
       })
-
-      if (response.ok) {
-        window.location.reload()
-        return
-      }
-
       button?.removeAttribute('disabled')
+
+      if (response.ok) onEnable?.()
     })
     wrapper.append(button)
     column.prepend(wrapper)
+    updateIntegrationStatus()
   }
 
   const observer = new MutationObserver((mutations) => {
@@ -373,11 +376,12 @@ export function watchIntegrationToggle() {
   return () => {
     observer.disconnect()
     document.getElementById(REENABLE_ID)?.remove()
+    integrationStatusElement = null
     button = null
   }
 }
 
-export function watchBookmarksRoute() {
+export function watchBookmarksRoute(onDisable?: () => void) {
   let stopView: (preserveLayout?: boolean) => void = () => {}
   let mounted = false
   let syncFrame: number | null = null
@@ -400,7 +404,7 @@ export function watchBookmarksRoute() {
 
     stopView(shouldMount)
     mounted = false
-    stopView = shouldMount ? mountBookmarksView() : () => {}
+    stopView = shouldMount ? mountBookmarksView(onDisable) : () => {}
     mounted = Boolean(document.getElementById(ROOT_ID))
   }
 
@@ -449,7 +453,28 @@ export function resetBookmarksView() {
 
 export function setSyncProgress(syncProgress: LibraryState['syncProgress']) {
   state = {...state, syncProgress}
+  if (syncProgress) syncError = ''
+  updateIntegrationStatus()
   notify()
+}
+
+export function setSyncError(error: string | null) {
+  syncError = error ?? ''
+  updateIntegrationStatus()
+}
+
+export function setAutoSyncEnabled(enabled: boolean) {
+  autoSyncEnabled = enabled
+  updateIntegrationStatus()
+}
+
+function updateIntegrationStatus() {
+  if (!integrationStatusElement) return
+  integrationStatusElement.textContent = syncError
+    ? 'Sync failed'
+    : state.syncProgress
+    ? `Syncing ${state.syncProgress.processed}...`
+    : `Auto-sync ${autoSyncEnabled ? 'on' : 'off'}`
 }
 
 function removeBookmarkFromLibrary(tweetId: string) {
@@ -608,7 +633,7 @@ function usePrefetchSentinel(enabled: boolean, onIntersect: () => void) {
   return ref
 }
 
-function BookmarksView() {
+function BookmarksView({onDisable}: {onDisable?: () => void}) {
   const {snapshot, folderSummaries, loading, refreshing, loadingMore, error, nextOffset, activeQuery, syncProgress} = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
   const [mode, setMode] = useState<ViewMode>('bookmarks')
   const [query, setQuery] = useState('')
@@ -922,8 +947,7 @@ function BookmarksView() {
       setActionError(response.error)
       return
     }
-
-    window.location.reload()
+    if (!enabled) onDisable?.()
   }
 
   async function startSync() {

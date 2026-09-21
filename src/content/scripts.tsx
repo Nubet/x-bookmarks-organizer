@@ -1,7 +1,7 @@
 import {sendRuntimeMessage} from '../shared/runtime'
 import type {ExtensionSettings, RuntimeMessage, SyncMode, SyncPageResult, SyncState} from '../shared/types'
 import {fetchBookmarkPage} from './page-bridge'
-import {refreshBookmarksView, resetBookmarksView, setSyncProgress, watchBookmarksRoute, watchIntegrationToggle} from './bookmarks-view'
+import {refreshBookmarksView, resetBookmarksView, setAutoSyncEnabled, setSyncError, setSyncProgress, watchBookmarksRoute, watchIntegrationToggle} from './bookmarks-view'
 import {isBookmarksRoute, watchRouteChanges} from './route'
 import {readAccountId, requireAccountId} from './account-session'
 import {watchNativeBookmarkActions} from './native-bookmark-observer'
@@ -18,6 +18,9 @@ export default function initial() {
   let syncFlight: Promise<unknown> | null = null
   let viewActive = false
   let disposed = false
+  let autoSyncRequested = false
+  let nativeSyncTimer: number | null = null
+  let settingsAutoSync = true
 
   const handleMessage = (message: RuntimeMessage, _sender: chrome.runtime.MessageSender, sendResponse: (response: unknown) => void) => {
     if (message.type === 'LIBRARY_CHANGED') {
@@ -35,12 +38,44 @@ export default function initial() {
       return
     }
 
-    if (message.type === 'SYNC_FINISHED' || message.type === 'SYNC_FAILED') {
-      if (message.accountId === readAccountId()) setSyncProgress(null)
+    if (message.type === 'SYNC_FINISHED') {
+      if (message.accountId === readAccountId()) {
+        setSyncError(null)
+        setSyncProgress(null)
+      }
+      return
+    }
+
+    if (message.type === 'SYNC_FAILED') {
+      if (message.accountId === readAccountId()) {
+        setSyncProgress(null)
+        setSyncError(message.error)
+      }
+      return
+    }
+
+    if (message.type === 'SETTINGS_CHANGED') {
+      const viewChanged = integrationEnabled !== null && integrationEnabled !== message.settings.pageIntegration
+      integrationEnabled = message.settings.pageIntegration
+      settingsAutoSync = message.settings.autoSync
+      setAutoSyncEnabled(message.settings.autoSync)
+      if (!message.settings.autoSync) {
+        autoSyncRequested = false
+      }
+      if (viewChanged && viewActive) {
+        stopBookmarksView()
+        stopBookmarksView = () => {}
+        viewActive = false
+      }
+      syncOrganizer()
       return
     }
 
     if (message.type !== 'SYNC_RUN') return
+    if (message.accountId && message.accountId !== readAccountId()) {
+      sendResponse({ok: false, error: 'X account changed before sync started'})
+      return
+    }
 
     if (!syncFlight) {
       syncFlight = runSync().finally(() => {
@@ -71,7 +106,14 @@ export default function initial() {
       removing
         ? {type: 'BOOKMARK_REMOVE_LOCAL', accountId: currentAccountId, tweetId: capture.tweetId}
         : {type: 'BOOKMARK_CAPTURE_LOCAL', accountId: currentAccountId, bookmark: capture}
-    )
+    ).then(() => {
+      if (removing || !settingsAutoSync) return
+      if (nativeSyncTimer !== null) window.clearTimeout(nativeSyncTimer)
+      nativeSyncTimer = window.setTimeout(() => {
+        nativeSyncTimer = null
+        requestAutoSync(currentAccountId)
+      }, 2000)
+    })
   })
   void start()
 
@@ -83,6 +125,7 @@ export default function initial() {
     chrome.runtime.onMessage.removeListener(handleMessage)
     if (accountCheckTimer !== null) window.clearInterval(accountCheckTimer)
     if (libraryChangeTimer !== null) window.clearTimeout(libraryChangeTimer)
+    if (nativeSyncTimer !== null) window.clearTimeout(nativeSyncTimer)
   }
 
   async function start() {
@@ -94,6 +137,8 @@ export default function initial() {
 
     integrationEnabled = response.data.pageIntegration
     accountId = readAccountId()
+    settingsAutoSync = response.data.autoSync
+    setAutoSyncEnabled(response.data.autoSync)
     accountCheckTimer = window.setInterval(checkAccount, 2000)
 
     syncOrganizer()
@@ -105,6 +150,7 @@ export default function initial() {
 
     accountId = nextAccountId
     accountGeneration += 1
+    autoSyncRequested = false
     resetBookmarksView()
 
     syncOrganizer()
@@ -114,6 +160,7 @@ export default function initial() {
     if (integrationEnabled === null) return
 
     if (!accountId || !isBookmarksRoute()) {
+      autoSyncRequested = false
       if (viewActive) {
         stopBookmarksView()
         stopBookmarksView = () => {}
@@ -122,14 +169,41 @@ export default function initial() {
       return
     }
 
-    if (viewActive) return
-    viewActive = true
-    stopBookmarksView = integrationEnabled
-      ? watchBookmarksRoute()
-      : watchIntegrationToggle()
+    if (!viewActive) {
+      viewActive = true
+      stopBookmarksView = integrationEnabled
+        ? watchBookmarksRoute(() => applyIntegrationSetting(false))
+        : watchIntegrationToggle(() => applyIntegrationSetting(true))
+    }
+
+    if (settingsAutoSync && !autoSyncRequested) requestAutoSync(accountId)
+  }
+
+  function applyIntegrationSetting(enabled: boolean) {
+    if (integrationEnabled === enabled) return
+
+    integrationEnabled = enabled
+    if (viewActive) {
+      stopBookmarksView()
+      stopBookmarksView = () => {}
+      viewActive = false
+    }
+    syncOrganizer()
+  }
+
+  function requestAutoSync(requestAccountId: string | null) {
+    if (!settingsAutoSync || !requestAccountId) return
+
+    autoSyncRequested = true
+    void sendRuntimeMessage({type: 'AUTO_SYNC_REQUEST', accountId: requestAccountId}).then((response) => {
+      if (!response.ok) {
+        autoSyncRequested = false
+      }
+    })
   }
 
   async function runSync() {
+    setSyncError(null)
     const syncAccountId = requireAccountId()
     const syncGeneration = accountGeneration
     const assertCurrentOperation = () => {
@@ -178,6 +252,7 @@ export default function initial() {
       if (!finishResponse.ok) throw new Error(finishResponse.error)
     } catch (error) {
       setSyncProgress(null)
+      setSyncError(error instanceof Error ? error.message : 'Sync failed')
       if (readAccountId() === syncAccountId && accountGeneration === syncGeneration) {
         await sendRuntimeMessage({type: 'SYNC_FAILED', accountId: syncAccountId, error: error instanceof Error ? error.message : 'Sync failed'})
       }

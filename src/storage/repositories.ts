@@ -15,8 +15,8 @@ import {createSearchIndex, createSearchTokens, filterBookmarks, getPostedAtTimes
 
 const defaultSettings: ExtensionSettings = {
   key: 'default',
-  pageIntegration: true,
-  autoSync: false,
+  pageIntegration: false,
+  autoSync: true,
 }
 
 const defaultSyncState: SyncState = {
