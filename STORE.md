@@ -42,6 +42,8 @@ npm install, then npm run build. The dist output matches the upload.
 
 ### Release notes
 
+Version 1.0.2 updates the extension name to "X Bookmarks Organizer - Search & Folders".
+
 Version 1.0.1 fixes manual synchronization in Firefox by using its callback-based tab APIs.
 
 Version 1.0.0 ships:
@@ -62,5 +64,6 @@ notes in most cases.
 
 ## Version history
 
+- 1.0.2 (released): Updated the extension name to "X Bookmarks Organizer - Search & Folders".
 - 1.0.1 (released): Fixed Firefox synchronization compatibility.
 - 1.0.0 (released): Initial release with local bookmark organization, search, folders, bulk actions, and X synchronization.
