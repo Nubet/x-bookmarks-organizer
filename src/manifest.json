@@ -11,7 +11,7 @@
       }
     }
   },
-  "name": "x-bookmarks-organizer",
+  "name": "X Bookmarks Organizer - Search & Folders",
   "description": "Search, organize, and manage X bookmarks with folders, filters, sorting, and bulk actions.",
   "icons": {
     "16": "images/icon-512.png",
@@ -28,7 +28,7 @@
       "64": "images/icon-512.png",
       "128": "images/icon-512.png"
     },
-    "default_title": "Open x-bookmarks-organizer",
+    "default_title": "Open X Bookmarks Organizer",
     "default_popup": "popup/index.html"
   },
   "firefox:browser_action": {
@@ -39,7 +39,7 @@
       "64": "images/icon-512.png",
       "128": "images/icon-512.png"
     },
-    "default_title": "Open x-bookmarks-organizer",
+    "default_title": "Open X Bookmarks Organizer",
     "default_popup": "popup/index.html"
   },
   "background": {

@@ -2,7 +2,7 @@
   "private": true,
   "name": "x-bookmarks-organizer",
   "author": "Norbert Fila",
-  "description": "Search, organize, and manage X bookmarks with folders, filters, sorting, and bulk actions.",
+  "description": "Search, organize, and manage X.com bookmarks with folders, filters, sorting, and bulk actions.",
   "version": "1.0.1",
   "license": "MIT",
   "type": "module",
